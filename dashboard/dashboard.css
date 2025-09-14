@@ -1,0 +1,163 @@
+/*
+ * A clean, modern, and minimalist theme for the Privacy Dashboard.
+ * This theme uses a soft gray palette with subtle accents for a gentle, professional feel.
+ */
+
+:root {
+  /* Define a color palette for a soft, modern theme */
+  --background-color: #f0f2f5;
+  --card-background: #ffffff;
+  --border-color: #e0e0e0;
+  --text-color-primary: #333333;
+  --text-color-secondary: #777777;
+
+  /* Subtle accents */
+  --accent-color: #5d5c7f; /* A calm, dark blue-gray */
+  --warning-color: #e6b800; /* A soft gold */
+  --danger-color: #c94c4c; /* A muted red */
+
+  /* Shadows for a sense of depth */
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* Font settings for a clean look */
+  --font-family-primary: 'Inter', sans-serif;
+  --font-family-display: 'Inter', sans-serif;
+}
+
+/* Global body styling */
+body {
+  font-family: var(--font-family-primary);
+  background-color: var(--background-color);
+  color: var(--text-color-primary);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Main content container with a clean layout */
+.container {
+  max-width: 1400px;
+  width: 100%;
+  padding: 40px 20px;
+}
+
+/* Main title styling */
+h1 {
+  font-family: var(--font-family-display);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 500;
+  color: var(--accent-color);
+  text-align: center;
+  margin-bottom: 50px;
+  letter-spacing: 2px;
+  /* Added a subtle gradient to the text */
+  background-image: linear-gradient(90deg, #5d5c7f, #8e949c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Grid for metric cards */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 25px;
+  margin-bottom: 40px;
+}
+
+/* Styling for individual metric cards */
+.metric-card {
+  background: var(--card-background);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  padding: 30px;
+  text-align: center;
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  border: 1px solid var(--border-color);
+}
+
+/* Hover effect with subtle lift */
+.metric-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.metric-card h2 {
+  font-size: 1.2rem;
+  font-weight: 300;
+  color: var(--text-color-secondary);
+  margin: 0 0 15px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.metric-value {
+  font-family: var(--font-family-display);
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--accent-color);
+  transition: color 0.3s ease-in-out;
+}
+
+/* Specific styling for different metric types */
+.metric-card.total .metric-value {
+  color: var(--danger-color);
+}
+
+.metric-card.unique .metric-value {
+  color: var(--warning-color);
+}
+
+.metric-card.domains .metric-value {
+  color: var(--accent-color);
+}
+
+/* Styling for chart sections */
+.chart-section {
+  background: var(--card-background);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  padding: 30px;
+  margin-bottom: 25px;
+  border: 1px solid var(--border-color);
+}
+
+.chart-section h2 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--text-color-primary);
+  margin-top: 0;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 15px;
+  margin-bottom: 20px;
+}
+
+/* Canvas styling for charts */
+canvas {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 12px;
+  width: 100% !important;
+  height: 350px !important;
+}
+
+/* Basic responsiveness for smaller screens */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2.5rem;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  canvas {
+    height: 250px !important;
+  }
+}

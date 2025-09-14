@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Privacy Dashboard</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 15px;
+      width: 350px;
+      background-color: #f4f7f6;
+      color: #333;
+      overflow-x: hidden;
+    }
+    h2 {
+      font-size: 20px;
+      margin-bottom: 15px;
+      color: #2c3e50;
+      display: flex;
+      align-items: center;
+    }
+    h2 svg {
+      margin-right: 8px;
+    }
+    .card {
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #34495e;
+    }
+    .metric-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #27ae60;
+    }
+    .btn { /* General button style */
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 10px;
+      transition: background-color 0.2s;
+      width: 100%; /* Make buttons full width */
+      box-sizing: border-box; /* Include padding in width */
+      margin-bottom: 5px; /* Spacing between buttons */
+    }
+    .btn:hover {
+      background-color: #2980b9;
+    }
+    .btn.danger { /* Style for dangerous actions like clear data */
+      background-color: #e74c3c;
+    }
+    .btn.danger:hover {
+      background-color: #c0392b;
+    }
+    #currentUrl {
+      font-size: 14px;
+      word-break: break-all;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h2>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-shield"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+    Privacy Dashboard
+  </h2>
+
+  <div class="card">
+    <div class="card-title">Currently Viewing:</div>
+    <p id="currentUrl">Loading...</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Trackers Blocked (Total):</div>
+    <p id="trackerCount" class="metric-value">0</p>
+    <button id="viewDetails" class="btn">View Full Dashboard</button>
+    <button id="clearDataButton" class="btn danger">Clear All Data</button>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Privacy Dashboard - Full View</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <style>
+    /* General styles from your existing project are assumed to be in dashboard.css */
+    /* Styles for new D3 Visualizations */
+    .graph-container, .timeline-container {
+      position: relative;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      border: 1px solid #e9ecef;
+      margin-top: 10px;
+    }
+
+    .graph-tooltip {
+      position: absolute;
+      text-align: center;
+      padding: 6px 10px;
+      font: 12px sans-serif;
+      background: #2c3e50;
+      color: #fff;
+      border: 0px;
+      border-radius: 8px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    /* Network Graph Styles */
+    .links line {
+      stroke: #999;
+      stroke-opacity: 0.6;
+    }
+    .nodes circle {
+      stroke: #fff;
+      stroke-width: 1.5px;
+    }
+    .node-label {
+        font-size: 11px;
+        fill: #1a1a1a;
+        pointer-events: none;
+        text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff;
+    }
+    .chart-section > p {
+        font-size: 14px;
+        color: #555;
+        margin-bottom: 15px;
+        line-height: 1.5;
+    }
+
+    /* Timeline Styles */
+    .timeline-container .axis .domain {
+        stroke: #666;
+    }
+    .timeline-container .axis .tick line {
+        stroke: #ccc;
+    }
+    .timeline-container .axis .tick text {
+        fill: #333;
+        font-size: 11px;
+    }
+    .timeline-container .brush .selection {
+        fill: rgba(52, 152, 219, 0.3);
+    }
+    .chart-section svg text {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>FULL PRIVACY DASHBOARD</h1>
+
+    <!-- FIX: Added a new metric card for Blocked Trackers -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <h2 id="totalTrackersHeader">Total Trackers Detected</h2>
+        <p id="totalTrackers" class="metric-value">Loading...</p>
+      </div>
+      <div class="metric-card">
+        <h2>Total Trackers Blocked</h2>
+        <p id="totalTrackersBlocked" class="metric-value">Loading...</p>
+      </div>
+      <div class="metric-card">
+        <h2>Unique Trackers</h2>
+        <p id="uniqueTrackers" class="metric-value">Loading...</p>
+      </div>
+      <div class="metric-card">
+        <h2>Unique Domains Visited</h2>
+        <p id="uniqueDomains" class="metric-value">Loading...</p>
+      </div>
+    </div>
+
+    <!-- NEW: D3.js Network Graph -->
+    <div class="chart-section">
+      <h2>Tracker Network Graph</h2>
+      <p>This graph shows the connections between websites you visit (blue circles) and the trackers they host (red circles). It reveals how a single tracker can follow you across multiple sites.</p>
+      <div class="graph-container">
+        <svg id="networkGraph"></svg>
+      </div>
+    </div>
+
+    <!-- Existing Chart.js Charts -->
+    <div class="chart-section">
+      <h2>Trackers Blocked Over Time</h2>
+      <canvas id="trackersOverTimeChart"></canvas>
+    </div>
+
+    <div class="chart-section">
+      <h2>Top Trackers</h2>
+      <canvas id="topTrackersChart"></canvas>
+    </div>
+
+    <!-- NEW: D3.js Timeline -->
+    <div class="chart-section">
+      <h2>Tracking Timeline (Brushable)</h2>
+      <p>Click and drag over a time period to inspect tracking activity more closely. The selected date range will be logged to the console.</p>
+      <div class="timeline-container">
+          <svg id="timelineChart"></svg>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="../lib/chart.min.js"></script>
+  <script src="../lib/d3.v7.min.js"></script>
+  <script type="module" src="./dashboard.js"></script>
+</body>
+</html>
+
