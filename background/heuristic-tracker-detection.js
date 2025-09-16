@@ -13,6 +13,16 @@ export async function checkForHeuristicMatch(potentialTrackerDomain, initiatorDo
     }
 
     try {
+        // --- ADDED LOGIC ---
+        // First, check if the domain is on the user's allowlist.
+        const { allowlist = [] } = await chrome.storage.local.get('allowlist');
+        if (allowlist.includes(potentialTrackerDomain)) {
+            // If it's on the list, do nothing further.
+            console.log(`Heuristic check skipped: ${potentialTrackerDomain} is on the allowlist.`);
+            return;
+        }
+        // --- END OF ADDED LOGIC ---
+
         // 1. Get current tracking data and dynamically added rules from storage
         const data = await chrome.storage.local.get(['heuristicTrackers', 'dynamicallyAddedRules']);
         const trackers = data.heuristicTrackers || {};

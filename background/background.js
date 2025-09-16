@@ -75,7 +75,15 @@ async function logRequestToDB(requestUrl, initiator, blocked, matchedRuleId = nu
 
 // This listener is for the HEURISTIC (Privacy Badger-style) detection.
 chrome.webRequest.onBeforeRequest.addListener(
-  (details) => {
+  async (details) => { // --- MODIFIED: Make listener async
+    // --- ADD THIS BLOCK ---
+    // First, check if the heuristic engine is enabled at all.
+    const { isHeuristicEngineEnabled = true } = await chrome.storage.local.get('isHeuristicEngineEnabled');
+    if (!isHeuristicEngineEnabled) {
+      return; // If disabled, do nothing.
+    }
+    // --- END ADD ---
+
     const { initiator, url } = details;
     if (initiator && (initiator.startsWith('http:') || initiator.startsWith('https:'))) {
         try {
@@ -83,6 +91,8 @@ chrome.webRequest.onBeforeRequest.addListener(
             const requestUrl = new URL(url);
             const initiatorDomain = initiatorUrl.hostname;
             const potentialTrackerDomain = requestUrl.hostname;
+
+            // This function now also needs to check the allowlist
             checkForHeuristicMatch(potentialTrackerDomain, initiatorDomain);
         } catch (e) { /* Ignore invalid URLs */ }
     }
@@ -117,17 +127,26 @@ chrome.webRequest.onCompleted.addListener(
 // It only fires for BLOCKED requests.
 chrome.runtime.onInstalled.addListener(async () => {
   console.log("Privacy Dashboard Extension Installed!");
+
+  // --- REVISED LOGIC FOR CLARITY ---
+  // Set default for heuristic engine toggle
+  await chrome.storage.local.set({ isHeuristicEngineEnabled: true });
+  // Initialize an empty allowlist
+  await chrome.storage.local.set({ allowlist: [] });
+  
+  // Your existing default settings logic
   chrome.storage.local.get("settings", (data) => {
     if (!data.settings) {
       const defaultSettings = {
         blockTrackers: true,
         logTrackers: true,
-        heuristicBlocking: true,
+        heuristicBlocking: true, // This seems redundant now but keeping for your structure
         darkMode: false,
       };
       chrome.storage.local.set({ settings: defaultSettings });
     }
   });
+//...
 
   if (chrome.declarativeNetRequest && chrome.declarativeNetRequest.onRuleMatchedDebug) {
     chrome.declarativeNetRequest.onRuleMatchedDebug.addListener(async (info) => {
@@ -159,7 +178,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     return true;
   } else if (message.action === "clearAllData") {
     try {
-        await chrome.storage.local.remove(['heuristicTrackers', 'dynamicallyAddedRules', 'nextRuleId']);
+        await chrome.storage.local.remove(['heuristicTrackers', 'dynamicallyAddedRules', 'nextRuleId', 'isHeuristicEngineEnabled', 'allowlist']);
         const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
         const ruleIdsToRemove = dynamicRules.map(rule => rule.id);
         if (ruleIdsToRemove.length > 0) {
