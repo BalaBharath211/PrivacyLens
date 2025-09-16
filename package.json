@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@adguard/dnr-rulesets": "^3.2.20250915180039",
     "chart.js": "^4.5.0"
   }
 }

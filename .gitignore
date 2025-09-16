@@ -13,3 +13,37 @@ yarn-error.log*
 System files
 .DS_Store
 Thumbs.db
+
+# Node modules
+node_modules/
+package-lock.json
+npm-debug.log
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Chrome extension stuff
+*.crx
+*.zip
+rules.json # optional: if you don't want to commit generated rules
+
+# VS Code
+.vscode/
+
+# Optional: temporary folders
+tmp/
+temp/
