@@ -1,93 +1,153 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Privacy Dashboard</title>
+  <title>Sentinel Privacy Dashboard</title>
   <style>
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Poppins', 'Segoe UI', Tahoma, sans-serif;
       padding: 15px;
-      width: 350px;
-      background-color: #f4f7f6;
-      color: #333;
+      width: 360px;
+      background-color: #f8fafc;
+      color: #1e293b;
       overflow-x: hidden;
     }
-    h2 {
-      font-size: 20px;
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 15px;
-      color: #2c3e50;
+    }
+
+    header h1 {
       display: flex;
       align-items: center;
+      font-size: 20px;
+      font-weight: bold;
+      color: #16a34a;
     }
-    h2 svg {
+
+    header svg {
       margin-right: 8px;
     }
+
+    /* Card styling */
     .card {
       background-color: #ffffff;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       padding: 15px;
       margin-bottom: 15px;
+      transition: transform 0.2s;
     }
+
+    .card:hover {
+      transform: translateY(-2px);
+    }
+
     .card-title {
-      font-size: 16px;
-      font-weight: bold;
-      margin-bottom: 10px;
-      color: #34495e;
+      font-size: 15px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 8px;
     }
+
     .metric-value {
-      font-size: 28px;
+      font-size: 32px;
       font-weight: bold;
-      color: #27ae60;
+      color: #16a34a;
     }
-    .btn { /* General button style */
-      background-color: #3498db;
-      color: white;
+
+    /* Button styling */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px 0;
       border: none;
-      padding: 8px 12px;
-      border-radius: 5px;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 14px;
-      margin-top: 10px;
-      transition: background-color 0.2s;
-      width: 100%; /* Make buttons full width */
-      box-sizing: border-box; /* Include padding in width */
-      margin-bottom: 5px; /* Spacing between buttons */
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #fff;
+      transition: all 0.2s;
     }
-    .btn:hover {
-      background-color: #2980b9;
+
+    .btn.primary {
+      background-color: #2563eb;
     }
-    .btn.danger { /* Style for dangerous actions like clear data */
-      background-color: #e74c3c;
+    .btn.primary:hover {
+      background-color: #1d4ed8;
+    }
+
+    .btn.danger {
+      background-color: #dc2626;
     }
     .btn.danger:hover {
-      background-color: #c0392b;
+      background-color: #b91c1c;
     }
+
     #currentUrl {
       font-size: 14px;
       word-break: break-all;
-      color: #555;
+      color: #475569;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 10px;
+    }
+
+    footer a {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
-  <h2>
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-shield"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-    Privacy Dashboard
-  </h2>
+  <header>
+    <h1>
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+      DataGuard
+    </h1>
+    <button id="settingsBtn" title="Settings" style="background:none;border:none;padding:8px;cursor:pointer;color:#475569;display:flex;align-items:center;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+  </header>
 
+  <!-- Current Site Info -->
   <div class="card">
     <div class="card-title">Currently Viewing:</div>
     <p id="currentUrl">Loading...</p>
   </div>
 
+  <!-- Tracker Summary -->
   <div class="card">
-    <div class="card-title">Trackers Blocked (Total):</div>
+    <div class="card-title">Trackers Blocked (Total)</div>
     <p id="trackerCount" class="metric-value">0</p>
-    <button id="viewDetails" class="btn">View Full Dashboard</button>
-    <button id="clearDataButton" class="btn danger">Clear All Data</button>
   </div>
 
-  <script type="module" src="popup.js"></script>
+  <!-- Quick Actions -->
+  <button id="viewDetails" class="btn primary">View Full Dashboard</button>
+  <button id="clearDataButton" class="btn danger">Clear All Data</button>
 
+  <footer>
+    <a href="#" id="openDashboard">Open Dashboard</a> | 
+    <a href="#" id="privacyPolicy">Privacy Policy</a>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

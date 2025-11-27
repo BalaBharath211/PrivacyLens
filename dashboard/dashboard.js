@@ -6,7 +6,6 @@ import {
   OBJECT_STORE_DOMAINS
 } from '../storage/indexedDB.js';
 
-// D3 is expected to be available as a global variable from the script tag in dashboard.html
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -119,10 +118,33 @@ function createNetworkGraph(requests, trackers, domains) {
     requests.forEach(req => {
         const tracker = trackerMap.get(req.trackerId);
         const domain = domainMap.get(req.initiatorDomainId);
-        if (tracker && domain && domain.name !== 'unknown-initiator-domain') {
-            if (!nodeMap.has(tracker.id)) nodeMap.set(tracker.id, { id: tracker.id, name: tracker.name, type: 'tracker' });
-            if (!nodeMap.has(domain.id)) nodeMap.set(domain.id, { id: domain.id, name: domain.name, type: 'domain' });
+        if (tracker && domain) {
+
+            // Handle unknown domains gracefully
+            const domainName =
+                !domain.name || domain.name === 'unknown-initiator-domain'
+                ? '(Unknown Domain)'
+                : domain.name;
+
+            // Add tracker node (red)
+            if (!nodeMap.has(tracker.id)) {
+                nodeMap.set(tracker.id, {
+                    id: tracker.id,
+                    name: tracker.name,
+                    type: 'tracker'
+                });
+            }
+
+            // Add domain node (blue)
+            if (!nodeMap.has(domain.id)) {
+                nodeMap.set(domain.id, {
+                    id: domain.id,
+                    name: domainName,
+                    type: 'domain'
+                });
+            }
         }
+
     });
 
     const nodes = Array.from(nodeMap.values());
@@ -223,3 +245,5 @@ function createTimeline(requests) {
     }
 }
 
+console.log("Requests:", await getAllItems("requests"));
+console.log("Domains:", await getAllItems("domains"));
