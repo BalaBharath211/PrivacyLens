@@ -5,9 +5,9 @@
   "version": "1.0",
   "permissions": [
     "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
     "storage",
-    "webRequest",
-    "webRequestBlocking"
+    "webRequest"
   ],
   "host_permissions": [
     "<all_urls>"

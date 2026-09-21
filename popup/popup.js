@@ -12,7 +12,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const updateTrackerCount = async () => {
     try {
       const allRequests = await getAllItems(OBJECT_STORE_REQUESTS);
-      document.getElementById("trackerCount").textContent = allRequests.length;
+      const blockedRequests = allRequests.filter(request => request.blocked).length;
+      document.getElementById("trackerCount").textContent = blockedRequests;
     } catch (error) {
       document.getElementById("trackerCount").textContent = "Error";
       console.error("Error getting tracker summary:", error);

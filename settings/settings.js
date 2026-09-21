@@ -1,3 +1,22 @@
+function normalizeHostname(value) {
+  if (typeof value !== 'string') return null;
+
+  const candidate = value
+    .trim()
+    .toLowerCase()
+    .replace(/^\|\|/, '')
+    .replace(/^\|/, '')
+    .replace(/\^.*$/, '')
+    .replace(/^\*\./, '');
+
+  try {
+    return new URL(
+      candidate.includes('://') ? candidate : `https://${candidate}`
+    ).hostname;
+  } catch {
+    return null;
+  }
+}
 // Get references to our HTML elements
 const heuristicToggle = document.getElementById('heuristic-toggle');
 const dynamicDomainList = document.getElementById('dynamic-domain-list');
@@ -19,8 +38,8 @@ const loadDynamicRules = async () => {
 
     dynamicRules.forEach(rule => {
         // We assume the domain is stored in the rule's condition
-        const domain = rule.condition.urlFilter.replace('*', '');
-        
+        const domain = normalizeHostname(rule.condition.urlFilter);
+        if (!domain) return;        
         // Skip rendering if this domain is already on the allowlist
         if(allowlist.includes(domain)) return;
 
@@ -47,26 +66,42 @@ const loadDynamicRules = async () => {
 
 // Function to handle the "Allow" button click
 const handleAllowDomain = async (event) => {
-    const { ruleId, domain } = event.target.dataset;
+  const { ruleId, domain: rawDomain } = event.target.dataset;
+  const domain = normalizeHostname(rawDomain);
 
-    // 1. Get the current allowlist from storage
-    const { allowlist = [] } = await chrome.storage.local.get('allowlist');
+  if (!domain) return;
 
-    // 2. Add the new domain to the allowlist (if not already present)
-    if (!allowlist.includes(domain)) {
-        allowlist.push(domain);
-        await chrome.storage.local.set({ allowlist });
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [parseInt(ruleId, 10)]
+  });
+
+  const { allowlist = [], dynamicallyAddedRules = {} } =
+    await chrome.storage.local.get([
+      'allowlist',
+      'dynamicallyAddedRules'
+    ]);
+
+  const normalizedAllowlist = [
+    ...new Set(allowlist.map(normalizeHostname).filter(Boolean))
+  ];
+
+  if (!normalizedAllowlist.includes(domain)) {
+    normalizedAllowlist.push(domain);
+  }
+
+  for (const key of Object.keys(dynamicallyAddedRules)) {
+    if (normalizeHostname(key) === domain) {
+      delete dynamicallyAddedRules[key];
     }
+  }
 
-    // 3. Remove the dynamic rule using its ID
-    await chrome.declarativeNetRequest.updateDynamicRules({
-        removeRuleIds: [parseInt(ruleId, 10)]
-    });
+  await chrome.storage.local.set({
+    allowlist: normalizedAllowlist,
+    dynamicallyAddedRules
+  });
 
-    // 4. Refresh the list to reflect the change
-    loadDynamicRules();
+  loadDynamicRules();
 };
-
 
 // Main function to initialize the page
 const initializeSettings = async () => {

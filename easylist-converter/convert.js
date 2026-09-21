@@ -1,42 +1,71 @@
-import fs from 'fs';
+const fs = require('node:fs');
+const path = require('node:path');
 
-// Load EasyList (download from https://easylist.to/easylist/easylist.txt first)
-const easylist = fs.readFileSync('easylist.txt', 'utf8').split('\n');
+const inputPath = path.join(__dirname, 'easylist.txt');
+const outputPath = path.join(__dirname, '..', 'rules', 'rules.json');
 
-let rules = [];
+const easylist = fs.readFileSync(inputPath, 'utf8').split(/\r?\n/);
+
+const rules = [];
 let id = 1;
-const MAX_RULES = 30000; // Chrome’s hard cap
+const MAX_RULES = 30000;
 
-// Function to remove non-ASCII characters from filters
-function sanitizeFilter(str) {
-  return str.replace(/[^\x00-\x7F]/g, "");
+const resourceTypes = [
+  'main_frame',
+  'sub_frame',
+  'script',
+  'image',
+  'xmlhttprequest'
+];
+
+function domainFromEasyListRule(rule) {
+  const value = rule.trim();
+
+  // Skip unsupported EasyList syntax rather than generating unsafe rules.
+  if (
+    !value ||
+    value.startsWith('!') ||
+    value.startsWith('@@') ||
+    value.includes('#') ||
+    value.startsWith('/') ||
+    value.includes('$')
+  ) {
+    return null;
+  }
+
+  const match = value.match(
+    /^\|\|([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)\^?$/i
+  );
+
+  if (!match) return null;
+
+  try {
+    const hostname = new URL(`https://${match[1]}`).hostname;
+    return hostname === match[1].toLowerCase() ? hostname : null;
+  } catch {
+    return null;
+  }
 }
 
 for (const rule of easylist) {
-  if (id > MAX_RULES) break; // stop once we hit 30k
+  if (rules.length >= MAX_RULES) break;
 
-  if (!rule || rule.startsWith('!') || rule.startsWith('##') || rule.startsWith('#@#')) continue;
-
-  const cleanedFilter = sanitizeFilter(rule.replace(/^(\|\|?)/, ''));
-
-  if (!cleanedFilter) continue; // skip empty filters after cleanup
+  const hostname = domainFromEasyListRule(rule);
+  if (!hostname) continue;
 
   rules.push({
     id: id++,
     priority: 1,
     action: { type: 'block' },
     condition: {
-      urlFilter: cleanedFilter,
-      resourceTypes: [
-        "main_frame",
-        "sub_frame",
-        "script",
-        "image",
-        "xmlhttprequest"
-      ]
+      urlFilter: `||${hostname}^`,
+      resourceTypes
     }
   });
 }
 
-fs.writeFileSync('rules.json', JSON.stringify(rules, null, 2));
-console.log(`✅ rules.json generated successfully with ${rules.length} rules (capped at ${MAX_RULES})`);
+fs.writeFileSync(outputPath, JSON.stringify(rules, null, 2));
+
+console.log(
+  `Generated ${rules.length} validated domain rules at ${outputPath}.`
+);

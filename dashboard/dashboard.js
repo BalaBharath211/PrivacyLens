@@ -20,17 +20,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- METRIC UPDATES ---
     // 1. Change the main metric to "Total Trackers Detected"
-    document.getElementById("totalTrackersHeader").textContent = "Total Trackers Detected";
+    document.getElementById("totalTrackersHeader").textContent = "Recorded Third-Party Requests";
+
     document.getElementById("totalTrackers").textContent = allRequests.length;
 
-    // 2. Add a new metric for "Total Trackers Blocked"
     const blockedRequests = allRequests.filter(req => req.blocked).length;
     document.getElementById("totalTrackersBlocked").textContent = blockedRequests;
 
-    // 3. Update the other metrics
-    document.getElementById("uniqueTrackers").textContent = allTrackers.length;
-    document.getElementById("uniqueDomains").textContent = allDomains.length;
+    document.getElementById("uniqueTrackers").textContent = 
+        new Set(allRequests.map(req => req.trackerId)).size;
 
+    document.getElementById("uniqueDomains").textContent =
+        new Set(allRequests.map(req => req.initiatorDomainId)).size;
 
     // --- Create "Trackers Blocked Over Time" Chart (Chart.js) ---
     const ctxTime = document.getElementById('trackersOverTimeChart').getContext('2d');
@@ -113,11 +114,13 @@ function createTopTrackersChart(ctx, allRequests, allTrackers) {
 function createNetworkGraph(requests, trackers, domains) {
     const trackerMap = new Map(trackers.map(t => [t.id, { ...t, type: 'tracker' }]));
     const domainMap = new Map(domains.map(d => [d.id, { ...d, type: 'domain' }]));
-
+    const trackerNodeId = id => `tracker:${id}`;
+    const domainNodeId = id => `domain:${id}`;
     const nodeMap = new Map();
     requests.forEach(req => {
         const tracker = trackerMap.get(req.trackerId);
         const domain = domainMap.get(req.initiatorDomainId);
+        
         if (tracker && domain) {
 
             // Handle unknown domains gracefully
@@ -127,21 +130,25 @@ function createNetworkGraph(requests, trackers, domains) {
                 : domain.name;
 
             // Add tracker node (red)
-            if (!nodeMap.has(tracker.id)) {
-                nodeMap.set(tracker.id, {
-                    id: tracker.id,
-                    name: tracker.name,
-                    type: 'tracker'
-                });
+            const trackerId = trackerNodeId(tracker.id);
+
+            if (!nodeMap.has(trackerId)) {
+            nodeMap.set(trackerId, {
+                id: trackerId,
+                name: tracker.name,
+                type: 'tracker'
+            });
             }
 
             // Add domain node (blue)
-            if (!nodeMap.has(domain.id)) {
-                nodeMap.set(domain.id, {
-                    id: domain.id,
-                    name: domainName,
-                    type: 'domain'
-                });
+            const domainId = domainNodeId(domain.id);
+
+            if (!nodeMap.has(domainId)) {
+            nodeMap.set(domainId, {
+                id: domainId,
+                name: domainName,
+                type: 'domain'
+            });
             }
         }
 
@@ -150,12 +157,16 @@ function createNetworkGraph(requests, trackers, domains) {
     const nodes = Array.from(nodeMap.values());
     const linkSet = new Set();
     const links = [];
+
     requests.forEach(req => {
-        const linkKey = `${req.initiatorDomainId}-${req.trackerId}`;
-        if (!linkSet.has(linkKey) && nodeMap.has(req.initiatorDomainId) && nodeMap.has(req.trackerId)) {
-            links.push({ source: req.initiatorDomainId, target: req.trackerId });
-            linkSet.add(linkKey);
-        }
+    const source = domainNodeId(req.initiatorDomainId);
+    const target = trackerNodeId(req.trackerId);
+    const linkKey = `${source}->${target}`;
+
+    if (!linkSet.has(linkKey) && nodeMap.has(source) && nodeMap.has(target)) {
+        links.push({ source, target });
+        linkSet.add(linkKey);
+    }
     });
 
     const svgElement = document.getElementById('networkGraph');

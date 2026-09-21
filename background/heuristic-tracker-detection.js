@@ -1,4 +1,24 @@
 // heuristic-tracker-detection.js
+let dynamicRuleQueue = Promise.resolve();
+function normalizeHostname(value) {
+  if (typeof value !== 'string') return null;
+
+  const candidate = value
+    .trim()
+    .toLowerCase()
+    .replace(/^\|\|/, '')
+    .replace(/^\|/, '')
+    .replace(/\^.*$/, '')
+    .replace(/^\*\./, '');
+
+  try {
+    return new URL(
+      candidate.includes('://') ? candidate : `https://${candidate}`
+    ).hostname;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Checks if a potential tracker has been seen on enough different sites to be classified as a tracker.
@@ -8,6 +28,8 @@
  * @param {string} initiatorDomain - The first-party domain where the request originated.
  */
 export async function checkForHeuristicMatch(potentialTrackerDomain, initiatorDomain) {
+    potentialTrackerDomain = normalizeHostname(potentialTrackerDomain);
+    initiatorDomain = normalizeHostname(initiatorDomain);
     if (!potentialTrackerDomain || !initiatorDomain || potentialTrackerDomain === initiatorDomain) {
         return;
     }
@@ -16,10 +38,20 @@ export async function checkForHeuristicMatch(potentialTrackerDomain, initiatorDo
         // --- ADDED LOGIC ---
         // First, check if the domain is on the user's allowlist.
         const { allowlist = [] } = await chrome.storage.local.get('allowlist');
-        if (allowlist.includes(potentialTrackerDomain)) {
-            // If it's on the list, do nothing further.
-            console.log(`Heuristic check skipped: ${potentialTrackerDomain} is on the allowlist.`);
-            return;
+
+        const normalizedAllowlist = [
+        ...new Set(allowlist.map(normalizeHostname).filter(Boolean))
+        ];
+
+        if (JSON.stringify(normalizedAllowlist) !== JSON.stringify(allowlist)) {
+        await chrome.storage.local.set({ allowlist: normalizedAllowlist });
+        }
+
+        if (normalizedAllowlist.includes(potentialTrackerDomain)) {
+        console.log(
+            `Heuristic check skipped: ${potentialTrackerDomain} is on the allowlist.`
+        );
+        return;
         }
         // --- END OF ADDED LOGIC ---
 
@@ -54,40 +86,76 @@ export async function checkForHeuristicMatch(potentialTrackerDomain, initiatorDo
     }
 }
 
-/**
- * Adds a new dynamic rule to the declarativeNetRequest ruleset to block the specified domain.
- * @param {string} trackerDomain - The domain to block.
- */
-async function addNewDynamicBlockingRule(trackerDomain) {
-    try {
-        const { nextRuleId = 10000 } = await chrome.storage.local.get('nextRuleId'); // Start dynamic rules at a high number
+function addNewDynamicBlockingRule(trackerDomain) {
+  const queuedUpdate = dynamicRuleQueue.then(() =>
+    addNewDynamicBlockingRuleInternal(trackerDomain)
+  );
 
-        const newRule = {
-            id: nextRuleId,
-            priority: 2, // Higher priority than static rules if needed
-            action: { type: 'block' },
-            condition: {
-                urlFilter: `||${trackerDomain}^`,
-                resourceTypes: ['main_frame', 'sub_frame', 'script', 'image', 'stylesheet', 'object', 'xmlhttprequest', 'ping', 'media', 'websocket', 'other']
-            }
-        };
+  dynamicRuleQueue = queuedUpdate.catch(error => {
+    console.error('Error adding new dynamic blocking rule:', error);
+  });
 
-        await chrome.declarativeNetRequest.updateDynamicRules({
-            addRules: [newRule]
-        });
+  return queuedUpdate;
+}
 
-        // Store a record that this rule was added to prevent re-adding it
-        const { dynamicallyAddedRules = {} } = await chrome.storage.local.get('dynamicallyAddedRules');
-        dynamicallyAddedRules[trackerDomain] = newRule.id;
+async function addNewDynamicBlockingRuleInternal(trackerDomain) {
+  trackerDomain = normalizeHostname(trackerDomain);
+  if (!trackerDomain) return;
 
-        await chrome.storage.local.set({
-            dynamicallyAddedRules: dynamicallyAddedRules,
-            nextRuleId: nextRuleId + 1 // Increment for the next rule
-        });
+  const [
+    { nextRuleId = 10000 },
+    existingRules,
+    { dynamicallyAddedRules = {} }
+  ] = await Promise.all([
+    chrome.storage.local.get('nextRuleId'),
+    chrome.declarativeNetRequest.getDynamicRules(),
+    chrome.storage.local.get('dynamicallyAddedRules')
+  ]);
 
-        console.log(`Added new dynamic rule #${newRule.id} to block ${trackerDomain}`);
+  // A queued request may have created the rule already.
+  if (dynamicallyAddedRules[trackerDomain]) {
+    return;
+  }
 
-    } catch (error) {
-        console.error("Error adding new dynamic blocking rule:", error);
+  const usedIds = new Set(existingRules.map(rule => rule.id));
+  let ruleId = Math.max(10000, nextRuleId);
+
+  while (usedIds.has(ruleId)) {
+    ruleId += 1;
+  }
+
+  const newRule = {
+    id: ruleId,
+    priority: 2,
+    action: { type: 'block' },
+    condition: {
+      urlFilter: `||${trackerDomain}^`,
+      resourceTypes: [
+        'main_frame',
+        'sub_frame',
+        'script',
+        'image',
+        'stylesheet',
+        'object',
+        'xmlhttprequest',
+        'ping',
+        'media',
+        'websocket',
+        'other'
+      ]
     }
+  };
+
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    addRules: [newRule]
+  });
+
+  dynamicallyAddedRules[trackerDomain] = ruleId;
+
+  await chrome.storage.local.set({
+    dynamicallyAddedRules,
+    nextRuleId: ruleId + 1
+  });
+
+  console.log(`Added dynamic rule #${ruleId} to block ${trackerDomain}`);
 }
