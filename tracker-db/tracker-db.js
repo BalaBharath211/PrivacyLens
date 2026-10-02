@@ -44,10 +44,6 @@ export function findTracker(domain, url = '') {
   return { id: pattern, domain: pattern, ...record, url };
 }
 
-export function getTrackerCompany(domain, url = '') {
-  return findTracker(domain, url)?.company ?? null;
-}
-
 export function getTrackerCatalog() {
   return Object.entries(trackerCatalog).map(([domain, tracker]) => ({
     id: domain,
