@@ -1,9 +1,5 @@
 let trackerCatalog = {};
 let sortedTrackerEntries = [];
-export const TRACKER_CATEGORIES = Object.freeze([
-  'Advertising', 'Analytics', 'Social Media', 'Fingerprinting', 'Utilities',
-  'Hosting', 'Content', 'CDN', 'Unknown'
-]);
 
 export async function initializeTrackerDB() {
   if (Object.keys(trackerCatalog).length > 0) return;
