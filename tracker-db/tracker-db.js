@@ -44,10 +44,6 @@ export function findTracker(domain, url = '') {
   return { id: pattern, domain: pattern, ...record, url };
 }
 
-export function isKnownTracker(domain, url = '') {
-  return findTracker(domain, url)?.type === 'tracker';
-}
-
 export function getTrackerCategory(domain, url = '') {
   return findTracker(domain, url)?.category ?? 'Unknown';
 }
