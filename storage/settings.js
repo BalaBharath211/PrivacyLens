@@ -142,8 +142,12 @@ export async function observeThirdParty(domain, siteDomain) {
   return operation;
 }
 
-export async function resetSettings() {
-  await chrome.storage.local.clear();
-  await chrome.storage.local.set(DEFAULT_SETTINGS);
-  return { ...DEFAULT_SETTINGS, sites: {} };
+export async function clearHeuristicObservations() {
+  const operation = observationsQueue.then(async () => {
+    await chrome.storage.local.remove('heuristicObservations');
+    observationsCache = {};
+  });
+  observationsQueue = operation.catch(() => {});
+  return operation;
 }
+
