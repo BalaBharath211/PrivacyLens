@@ -1,161 +1,56 @@
-// heuristic-tracker-detection.js
-let dynamicRuleQueue = Promise.resolve();
-function normalizeHostname(value) {
-  if (typeof value !== 'string') return null;
+const TRACKING_PATH = /(?:^|\/)(?:collect|analytics|track|tracking|pixel|beacon|events?)(?:\/|$)/i;
+const TRACKING_PARAMETERS = new Set([
+  'uid', 'user_id', 'userid', 'client_id', 'visitor_id', 'device_id',
+  'fbclid', 'gclid', 'ttclid', 'tracking_id'
+]);
 
-  const candidate = value
-    .trim()
-    .toLowerCase()
-    .replace(/^\|\|/, '')
-    .replace(/^\|/, '')
-    .replace(/\^.*$/, '')
-    .replace(/^\*\./, '');
+export function classifyHeuristic(analysis, observedSiteCount = 0, protectionLevel = 'balanced') {
+  if (
+    !analysis?.isThirdParty ||
+    analysis.isTracker ||
+    analysis.serviceType === 'service' ||
+    !analysis.url
+  ) {
+    return { classification: 'NONE', confidence: 0, signals: [] };
+  }
+
+  let confidence = 0;
+  const signals = [];
 
   try {
-    return new URL(
-      candidate.includes('://') ? candidate : `https://${candidate}`
-    ).hostname;
+    const url = new URL(analysis.url);
+    if (TRACKING_PATH.test(url.pathname)) {
+      confidence += 0.4;
+      signals.push('tracking-endpoint');
+    }
+
+    if ([...url.searchParams.keys()].some((key) =>
+      TRACKING_PARAMETERS.has(key.toLowerCase())
+    )) {
+      confidence += 0.35;
+      signals.push('tracking-identifier');
+    }
   } catch {
-    return null;
-  }
-}
-
-/**
- * Checks if a potential tracker has been seen on enough different sites to be classified as a tracker.
- * If it has, a new dynamic blocking rule is added.
- * This is the core of the "Privacy Badger" model.
- * @param {string} potentialTrackerDomain - The third-party domain that might be a tracker.
- * @param {string} initiatorDomain - The first-party domain where the request originated.
- */
-export async function checkForHeuristicMatch(potentialTrackerDomain, initiatorDomain) {
-    potentialTrackerDomain = normalizeHostname(potentialTrackerDomain);
-    initiatorDomain = normalizeHostname(initiatorDomain);
-    if (!potentialTrackerDomain || !initiatorDomain || potentialTrackerDomain === initiatorDomain) {
-        return;
-    }
-
-    try {
-        // --- ADDED LOGIC ---
-        // First, check if the domain is on the user's allowlist.
-        const { allowlist = [] } = await chrome.storage.local.get('allowlist');
-
-        const normalizedAllowlist = [
-        ...new Set(allowlist.map(normalizeHostname).filter(Boolean))
-        ];
-
-        if (JSON.stringify(normalizedAllowlist) !== JSON.stringify(allowlist)) {
-        await chrome.storage.local.set({ allowlist: normalizedAllowlist });
-        }
-
-        if (normalizedAllowlist.includes(potentialTrackerDomain)) {
-        console.log(
-            `Heuristic check skipped: ${potentialTrackerDomain} is on the allowlist.`
-        );
-        return;
-        }
-        // --- END OF ADDED LOGIC ---
-
-        // 1. Get current tracking data and dynamically added rules from storage
-        const data = await chrome.storage.local.get(['heuristicTrackers', 'dynamicallyAddedRules']);
-        const trackers = data.heuristicTrackers || {};
-        const dynamicRules = data.dynamicallyAddedRules || {};
-
-        // If this domain is already blocked dynamically, no need to do anything else.
-        if (dynamicRules[potentialTrackerDomain]) {
-            return;
-        }
-
-        // 2. Add the new site to the set for this domain
-        if (!trackers[potentialTrackerDomain]) {
-            trackers[potentialTrackerDomain] = [];
-        }
-        if (!trackers[potentialTrackerDomain].includes(initiatorDomain)) {
-            trackers[potentialTrackerDomain].push(initiatorDomain);
-        }
-
-        // 3. Save back to storage
-        await chrome.storage.local.set({ heuristicTrackers: trackers });
-
-        // 4. Check if it now qualifies as a tracker (seen on 3 or more unique sites)
-        if (trackers[potentialTrackerDomain].length >= 3) {
-            console.log(`Heuristic match: ${potentialTrackerDomain} is now considered a tracker.`);
-            await addNewDynamicBlockingRule(potentialTrackerDomain);
-        }
-    } catch (error) {
-        console.error("Error in heuristic tracker check:", error);
-    }
-}
-
-function addNewDynamicBlockingRule(trackerDomain) {
-  const queuedUpdate = dynamicRuleQueue.then(() =>
-    addNewDynamicBlockingRuleInternal(trackerDomain)
-  );
-
-  dynamicRuleQueue = queuedUpdate.catch(error => {
-    console.error('Error adding new dynamic blocking rule:', error);
-  });
-
-  return queuedUpdate;
-}
-
-async function addNewDynamicBlockingRuleInternal(trackerDomain) {
-  trackerDomain = normalizeHostname(trackerDomain);
-  if (!trackerDomain) return;
-
-  const [
-    { nextRuleId = 10000 },
-    existingRules,
-    { dynamicallyAddedRules = {} }
-  ] = await Promise.all([
-    chrome.storage.local.get('nextRuleId'),
-    chrome.declarativeNetRequest.getDynamicRules(),
-    chrome.storage.local.get('dynamicallyAddedRules')
-  ]);
-
-  // A queued request may have created the rule already.
-  if (dynamicallyAddedRules[trackerDomain]) {
-    return;
+    return { classification: 'NONE', confidence: 0, signals: [] };
   }
 
-  const usedIds = new Set(existingRules.map(rule => rule.id));
-  let ruleId = Math.max(10000, nextRuleId);
-
-  while (usedIds.has(ruleId)) {
-    ruleId += 1;
+  if (analysis.type === 'ping') {
+    confidence += 0.2;
+    signals.push('beacon-request');
   }
 
-  const newRule = {
-    id: ruleId,
-    priority: 2,
-    action: { type: 'block' },
-    condition: {
-      urlFilter: `||${trackerDomain}^`,
-      resourceTypes: [
-        'main_frame',
-        'sub_frame',
-        'script',
-        'image',
-        'stylesheet',
-        'object',
-        'xmlhttprequest',
-        'ping',
-        'media',
-        'websocket',
-        'other'
-      ]
-    }
-  };
+  if (observedSiteCount >= 3) {
+    confidence += 0.2;
+    signals.push('cross-site-presence');
+  }
 
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    addRules: [newRule]
-  });
+  confidence = Math.min(confidence, 0.99);
+  const possibleThreshold = protectionLevel === 'strict' ? 0.2 : 0.35;
+  const classification = confidence >= 0.7
+    ? 'LIKELY'
+    : confidence >= possibleThreshold
+      ? 'POSSIBLE'
+      : 'NONE';
 
-  dynamicallyAddedRules[trackerDomain] = ruleId;
-
-  await chrome.storage.local.set({
-    dynamicallyAddedRules,
-    nextRuleId: ruleId + 1
-  });
-
-  console.log(`Added dynamic rule #${ruleId} to block ${trackerDomain}`);
+  return { classification, confidence, signals };
 }

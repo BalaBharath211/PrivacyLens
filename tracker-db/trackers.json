@@ -1,0 +1,122 @@
+{
+  "google-analytics.com": {
+    "company": "Google",
+    "name": "Google Analytics",
+    "category": "Analytics",
+    "purpose": "Website measurement",
+    "type": "tracker",
+    "confidence": 0.99
+  },
+  "doubleclick.net": {
+    "company": "Google",
+    "name": "DoubleClick",
+    "category": "Advertising",
+    "purpose": "Ad delivery and measurement",
+    "type": "tracker",
+    "confidence": 0.99
+  },
+  "googleadservices.com": {
+    "company": "Google",
+    "name": "Google Ads",
+    "category": "Advertising",
+    "purpose": "Ad delivery and measurement",
+    "type": "tracker",
+    "confidence": 0.98
+  },
+  "connect.facebook.net": {
+    "company": "Meta",
+    "name": "Meta Pixel",
+    "category": "Social Media",
+    "purpose": "Ad conversion measurement",
+    "type": "tracker",
+    "confidence": 0.97
+  },
+  "hotjar.com": {
+    "company": "Contentsquare",
+    "name": "Hotjar",
+    "category": "Analytics",
+    "purpose": "Behavior analytics",
+    "type": "tracker",
+    "confidence": 0.98
+  },
+  "clarity.ms": {
+    "company": "Microsoft",
+    "name": "Microsoft Clarity",
+    "category": "Analytics",
+    "purpose": "Behavior analytics",
+    "type": "tracker",
+    "confidence": 0.98
+  },
+  "segment.io": {
+    "company": "Twilio",
+    "name": "Segment",
+    "category": "Analytics",
+    "purpose": "Analytics data collection",
+    "type": "tracker",
+    "confidence": 0.96
+  },
+  "mixpanel.com": {
+    "company": "Mixpanel",
+    "name": "Mixpanel",
+    "category": "Analytics",
+    "purpose": "Product analytics",
+    "type": "tracker",
+    "confidence": 0.96
+  },
+  "googletagmanager.com": {
+    "company": "Google",
+    "name": "Google Tag Manager",
+    "category": "Utilities",
+    "purpose": "Website tag delivery",
+    "type": "service",
+    "confidence": 0.9
+  },
+  "fonts.googleapis.com": {
+    "company": "Google",
+    "name": "Google Fonts",
+    "category": "Content",
+    "purpose": "Font delivery",
+    "type": "service",
+    "confidence": 0.99
+  },
+  "fonts.gstatic.com": {
+    "company": "Google",
+    "name": "Google Fonts CDN",
+    "category": "CDN",
+    "purpose": "Font asset delivery",
+    "type": "service",
+    "confidence": 0.99
+  },
+  "cdn.jsdelivr.net": {
+    "company": "ProspectOne",
+    "name": "jsDelivr",
+    "category": "CDN",
+    "purpose": "Open-source package delivery",
+    "type": "service",
+    "confidence": 0.99
+  },
+  "youtube.com": {
+    "company": "Google",
+    "name": "YouTube",
+    "category": "Content",
+    "purpose": "Video delivery",
+    "type": "service",
+    "confidence": 0.99
+  },
+  "fingerprint.com": {
+    "company": "Fingerprint",
+    "name": "Fingerprint",
+    "category": "Fingerprinting",
+    "purpose": "Browser identification",
+    "type": "tracker",
+    "confidence": 0.94
+  },
+  "storage.googleapis.com": {
+    "company": "Google",
+    "name": "Google Cloud Storage",
+    "category": "Hosting",
+    "purpose": "Cloud asset hosting",
+    "type": "service",
+    "confidence": 0.97
+  }
+}

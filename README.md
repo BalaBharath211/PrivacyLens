@@ -1,98 +1,44 @@
-# Privacy Dashboard
+# Privacy Lens
 
-Privacy Dashboard is a browser extension that helps you see when websites load third-party trackers and whether those requests are blocked or allowed.
+Privacy Lens is a local-first Manifest V3 browser extension for identifying third-party requests and blocking known trackers and advertising domains. Its popup is the main interface; it does not use a separate analytics dashboard.
 
-It watches network activity in the browser, stores the data locally, and shows a simple dashboard with charts and summaries so users can understand what is tracking them.
+## Runtime flow
 
-## What it does
+1. Chrome's Declarative Net Request (DNR) engine evaluates the bundled static rules and synchronized dynamic policy rules.
+2. The background service worker observes completed requests and, when available, DNR block matches.
+3. The request analyzer identifies the request host, best-effort registered domain, initiator, resource type, and tracker catalog match.
+4. The heuristic classifier flags suspicious unknown requests but does not automatically block them.
+5. The policy layer combines protection settings and exceptions; bounded request records and longer-lived site/tracker counters are saved locally.
+6. The popup requests current-site data from the service worker and displays categories, outcomes, and controls.
 
-- Detects third-party requests
-- Identifies possible trackers
-- Tracks which domains are being contacted
-- Blocks suspicious tracker domains using dynamic browser rules
-- Shows results in a popup and dashboard
-- Stores data locally in the browser
+DNR performs blocking before extension JavaScript observes a request. The service worker cannot make a synchronous JavaScript decision to cancel a request; actual blocked status is recorded when Chrome reports a matching block rule. `onRuleMatchedDebug` is principally available for unpacked/developer or policy-installed extensions, so blocked-request counts should be verified in the target installation mode.
 
-## Why this project exists
+## Main files
 
-Many websites load scripts, ads, analytics tools, and other services from other domains. These can be used for tracking user behavior across the web.
+- `manifest.json`: extension entry points, permissions, and static ruleset registration.
+- `background/background.js`: event and popup-message orchestration.
+- `background/request-analyzer.js`: defensive request parsing and tracker lookup.
+- `background/heuristic-tracker-detection.js`: confidence-based suspicious-request classification.
+- `background/risk-engine.js`: centralized `BLOCKED`, `ALLOWED`, and `FLAGGED` policy outcomes.
+- `background/rule-manager.js`: dynamic DNR policy reconciliation and exception priorities.
+- `tracker-db/trackers.json`: small, original tracker/service catalog.
+- `tracker-db/tracker-db.js`: cached domain matching and supported categories.
+- `storage/indexedDB.js`: bounded request history and aggregated site/tracker counts.
+- `storage/settings.js`: extension policy settings and bounded cross-site observations.
+- `popup/`: primary protection controls, activity categories, and tracker details.
+- `settings/`: global policy, detection sensitivity, trusted sites, and global blocked domains.
+- `rules/rules.json`: bundled static DNR rules.
+- `easylist-converter/`: utility for generating supported domain rules from its local list.
 
-This project gives users visibility into that activity and helps them understand which domains are collecting data.
+The request history is capped at 500 records. Query strings and URL fragments are removed before persistence; heuristic checks use the full in-memory request URL. All data remains in the browser profile.
 
-## Main features
+## Load locally
 
-- Third-party request detection
-- Heuristic tracker detection
-- Dynamic blocking of suspicious domains
-- Allowlist support
-- Blocked vs allowed request tracking
-- Dashboard with charts and visualizations
-- Local browser storage using IndexedDB
+1. Open `chrome://extensions` or `edge://extensions`.
+2. Enable Developer mode.
+3. Select **Load unpacked** and choose this project directory.
+4. Open the extension popup on a normal website to inspect activity and adjust site controls.
 
-## How it works
+## Manual verification
 
-1. The browser sends a request to a resource.
-2. The extension checks whether the request is coming from a different domain than the current site.
-3. If it is a third-party request, it logs the request.
-4. The extension checks whether the domain appears across many different sites.
-5. If the same tracker appears often enough, it is treated as a likely tracker.
-6. The extension can block that tracker dynamically.
-7. The details are saved locally and shown in the dashboard.
-
-## Tech stack
-
-- JavaScript
-- HTML
-- CSS
-- Chrome Extension APIs
-- IndexedDB
-- Chart.js
-- D3.js
-- Manifest V3
-
-## Project structure
-
-- background/ - browser event listeners and detection logic
-- dashboard/ - dashboard UI and charts
-- popup/ - quick summary popup
-- settings/ - user settings page
-- storage/ - local browser database logic
-- rules/ - rule definitions
-- icons/ - extension icons
-- lib/ - third-party libraries
-- manifest.json - browser extension configuration
-
-## Installation
-
-1. Open Google Chrome or Microsoft Edge.
-2. Go to the extensions page.
-3. Enable Developer Mode.
-4. Click Load unpacked.
-5. Select this project folder.
-6. The extension will load and be ready to use.
-
-## Usage
-
-- Click the extension icon in the browser toolbar.
-- Open the popup to see a quick summary.
-- Open the dashboard for a more detailed view.
-- Use settings to toggle heuristic tracking and manage allowlisted domains.
-
-## Notes
-
-This project is a privacy and tracking analysis tool. It is useful for learning, testing, and understanding how tracker behavior works in the browser.
-
-The detection is heuristic-based, which means it tries to infer tracking behavior from patterns rather than relying on a static list only.
-
-## License
-
-This project is provided as-is for learning and experimentation.
-
-## Contributing
-
-You are welcome to improve the extension by:
-
-- improving tracking detection
-- adding better privacy controls
-- improving the dashboard UI
-- fixing bugs and edge cases
+Test on ordinary sites and sites that load known analytics/ad services. Check category grouping, blocked/allowed/flagged outcomes, global and per-site switches, trust/allow exceptions, global domain blocking, navigation badge resets, and settings after restarting the service worker. DNR reporting and rule limits vary by Chrome version and extension installation mode; validate those in the target browser.

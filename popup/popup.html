@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Sentinel Privacy Dashboard</title>
+  <title>Privacy Lens</title>
   <style>
     body {
       font-family: 'Poppins', 'Segoe UI', Tahoma, sans-serif;
@@ -110,44 +110,69 @@
 
     footer a:hover {
       text-decoration: underline;
-    }
+    </style>
+    <link rel="stylesheet" href="popup.css">
   </style>
 </head>
-<body>
-  <header>
-    <h1>
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-      DataGuard
-    </h1>
-    <button id="settingsBtn" title="Settings" style="background:none;border:none;padding:8px;cursor:pointer;color:#475569;display:flex;align-items:center;">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-      </svg>
-    </button>
-  </header>
+    <main class="popup-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img src="../icons/icon48.png" alt="">
+          <div><span class="eyebrow">PRIVACY LENS</span><h1>Site protection</h1></div>
+        </div>
+        <button class="text-button" id="settingsBtn" type="button" title="Open settings">Settings</button>
+      </header>
 
-  <!-- Current Site Info -->
-  <div class="card">
-    <div class="card-title">Currently Viewing:</div>
-    <p id="currentUrl">Loading...</p>
-  </div>
+      <section class="site-strip" aria-live="polite">
+        <span class="site-mark" aria-hidden="true"></span>
+        <div class="site-copy"><span class="eyebrow">CURRENT SITE</span><strong id="siteDomain">Loading site...</strong></div>
+        <span class="protection-state" id="siteState">Checking</span>
+      </section>
 
-  <!-- Tracker Summary -->
-  <div class="card">
-    <div class="card-title">Blocked Requests</div>
-    <p id="trackerCount" class="metric-value">0</p>
-  </div>
+      <section class="protection-panel" aria-label="Protection controls">
+        <label class="switch-row" for="globalProtection">
+          <span><strong>Global protection</strong><small>Known trackers and ads</small></span>
+          <input id="globalProtection" type="checkbox">
+        </label>
+        <div class="control-divider"></div>
+        <label class="switch-row" for="siteProtection">
+          <span><strong>Protect this site</strong><small>Pause protection for this site</small></span>
+          <input id="siteProtection" type="checkbox">
+        </label>
+        <button class="quiet-button" id="trustSite" type="button">Trust this site</button>
+      </section>
 
-  <!-- Quick Actions -->
-  <button id="viewDetails" class="btn primary">View Full Dashboard</button>
-  <button id="clearDataButton" class="btn danger">Clear All Data</button>
+      <section class="activity" aria-label="Request activity">
+        <div class="section-heading"><h2>Third-party activity</h2><span id="pageBlocked" class="page-count">0 blocked this page</span></div>
+        <div id="trackerList" class="tracker-list" aria-live="polite">
+          <p class="empty-state">Loading activity...</p>
+        </div>
+      </section>
 
-  <footer>
-    <a href="#" id="openDashboard">Open Dashboard</a> | 
-    <a href="#" id="privacyPolicy">Privacy Policy</a>
-  </footer>
+      <section class="summary" aria-label="Request totals">
+        <div><strong id="blockedCount">0</strong><span>Blocked</span></div>
+        <div><strong id="allowedCount">0</strong><span>Allowed</span></div>
+        <div><strong id="flaggedCount">0</strong><span>Flagged</span></div>
+      </section>
 
+      <section id="trackerDetail" class="detail-panel" aria-live="polite" hidden>
+        <button id="detailBack" class="back-button" type="button">Back to activity</button>
+        <p class="eyebrow" id="detailCategory">TRACKER</p>
+        <h2 id="detailName"></h2>
+        <p class="detail-domain" id="detailDomain"></p>
+        <dl>
+          <div><dt>Company</dt><dd id="detailCompany">Unknown</dd></div>
+          <div><dt>Purpose</dt><dd id="detailPurpose">Unknown</dd></div>
+          <div><dt>Requests</dt><dd id="detailRequests">0</dd></div>
+          <div><dt>Latest status</dt><dd id="detailStatus">ALLOWED</dd></div>
+        </dl>
+        <button id="allowTracker" class="action-button" type="button">Allow on this site</button>
+        <button id="blockTracker" class="quiet-button" type="button">Block globally</button>
+      </section>
+
+      <p id="errorMessage" class="error-message" role="status" hidden></p>
+    </main>
+    <script type="module" src="popup.js"></script>
   <script type="module" src="popup.js"></script>
 </body>
 </html>

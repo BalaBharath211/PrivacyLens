@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Privacy Dashboard",
-  "description": "A personalized privacy dashboard that detects trackers and shows who is collecting your data.",
+  "name": "Privacy Lens",
+  "description": "A lightweight tracker and ad blocker with per-site privacy controls.",
   "version": "1.0",
   "permissions": [
     "declarativeNetRequest",
@@ -23,7 +23,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Privacy Dashboard"
+    "default_title": "Privacy Lens"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -39,20 +39,5 @@
         "path": "rules/rules.json"
       }
     ]
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "dashboard/dashboard.html",
-        "dashboard/dashboard.js",
-        "dashboard/dashboard.css",
-        "storage/indexedDB.js",
-        "lib/chart.min.js",
-        "lib/d3.v7.min.js"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ]
+  }
 }

@@ -1,181 +1,233 @@
-// indexedDB.js
+const DATABASE_NAME = 'PrivacyDashboardDB';
+const DATABASE_VERSION = 2;
+const REQUEST_STORE = 'requests';
+const TRACKER_STORE = 'trackers';
+const SITE_STORE = 'sites';
+const MAX_REQUEST_RECORDS = 500;
 
-const DB_NAME = 'PrivacyDashboardDB';
-const DB_VERSION = 1; // Increment this number if you change the schema (object stores or indexes)
+let databasePromise;
 
-const OBJECT_STORE_TRACKERS = 'trackers';
-const OBJECT_STORE_REQUESTS = 'requests';
-const OBJECT_STORE_DOMAINS = 'domains';
-const OBJECT_STORE_REQUEST_DATA_TYPES = 'requestDataTypes'; // For many-to-many relationship
-
-
-let db; // Global variable to hold the database instance
-
-/**
- * Opens the IndexedDB database, creating object stores if they don't exist.
- * This function should be called once to initialize the database.
- * @returns {Promise<IDBDatabase>} A promise that resolves with the database instance.
- */
-function openPrivacyDashboardDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onerror = (event) => {
-            console.error("IndexedDB error:", event.target.errorCode);
-            reject("Error opening DB");
-        };
-
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            console.log("IndexedDB opened successfully.");
-            resolve(db);
-        };
-
-        // This event fires if the database version changes, allowing you to upgrade schema
-        request.onupgradeneeded = (event) => {
-            db = event.target.result;
-            console.log("IndexedDB upgrade needed. Creating/modifying object stores.");
-
-            // Create 'trackers' object store (stores unique tracker info)
-            if (!db.objectStoreNames.contains(OBJECT_STORE_TRACKERS)) {
-                const trackerStore = db.createObjectStore(OBJECT_STORE_TRACKERS, { keyPath: 'id', autoIncrement: true });
-                trackerStore.createIndex('url', 'url', { unique: true }); // Index for fast lookup by URL
-                trackerStore.createIndex('name', 'name', { unique: false }); // Index for tracker names
-            }
-
-            // Create 'domains' object store (stores unique domain info of visited sites and trackers)
-            if (!db.objectStoreNames.contains(OBJECT_STORE_DOMAINS)) {
-                const domainStore = db.createObjectStore(OBJECT_STORE_DOMAINS, { keyPath: 'id', autoIncrement: true });
-                domainStore.createIndex('name', 'name', { unique: true }); // Index for domain names
-            }
-
-            // Create 'requests' object store (stores individual detected tracking requests)
-            if (!db.objectStoreNames.contains(OBJECT_STORE_REQUESTS)) {
-                const requestStore = db.createObjectStore(OBJECT_STORE_REQUESTS, { keyPath: 'id', autoIncrement: true });
-                requestStore.createIndex('timestamp', 'timestamp', { unique: false });
-                requestStore.createIndex('initiatorDomainId', 'initiatorDomainId', { unique: false }); // Foreign key to domains
-                requestStore.createIndex('trackerId', 'trackerId', { unique: false }); // Foreign key to trackers
-                requestStore.createIndex('requestUrl', 'requestUrl', { unique: false }); // To query original request URL
-                requestStore.createIndex('blocked', 'blocked', { unique: false }); // Was it blocked?
-            }
-
-            // Create 'requestDataTypes' object store (for many-to-many relationship between requests and data types)
-            // Example: A request might involve 'cookies' and 'ip_address' data types.
-            if (!db.objectStoreNames.contains(OBJECT_STORE_REQUEST_DATA_TYPES)) {
-                const requestDataTypeStore = db.createObjectStore(OBJECT_STORE_REQUEST_DATA_TYPES, { keyPath: 'id', autoIncrement: true });
-                requestDataTypeStore.createIndex('requestId', 'requestId', { unique: false });
-                requestDataTypeStore.createIndex('dataType', 'dataType', { unique: false }); // e.g., 'cookies', 'ip_address', 'fingerprint'
-                requestDataTypeStore.createIndex('requestId_dataType', ['requestId', 'dataType'], { unique: true }); // Composite index
-            }
-
-            console.log("IndexedDB schema upgrade complete.");
-        };
-    });
+function ensureIndex(store, name, keyPath, options = {}) {
+  if (!store.indexNames.contains(name)) {
+    store.createIndex(name, keyPath, options);
+  }
 }
 
-/**
- * Gets the database instance. If not open, it opens it.
- * @returns {Promise<IDBDatabase>} A promise that resolves with the database instance.
- */
-async function getDB() {
-    if (!db) {
-        db = await openPrivacyDashboardDB();
-    }
-    return db;
+function openDatabase() {
+  if (databasePromise) return databasePromise;
+
+  databasePromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const database = event.target.result;
+      const transaction = event.target.transaction;
+      const trackers = database.objectStoreNames.contains(TRACKER_STORE)
+        ? transaction.objectStore(TRACKER_STORE)
+        : database.createObjectStore(TRACKER_STORE, {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+      ensureIndex(trackers, 'url', 'url', { unique: true });
+      ensureIndex(trackers, 'domain', 'domain');
+
+      const requests = database.objectStoreNames.contains(REQUEST_STORE)
+        ? transaction.objectStore(REQUEST_STORE)
+        : database.createObjectStore(REQUEST_STORE, {
+            keyPath: 'id',
+            autoIncrement: true
+          });
+      ensureIndex(requests, 'timestamp', 'timestamp');
+      ensureIndex(requests, 'domain', 'domain');
+      ensureIndex(requests, 'siteDomain', 'siteDomain');
+      ensureIndex(requests, 'action', 'action');
+      ensureIndex(requests, 'tabId', 'tabId');
+
+      if (!database.objectStoreNames.contains(SITE_STORE)) {
+        database.createObjectStore(SITE_STORE, { keyPath: 'domain' });
+      }
+
+      const existingKeys = requests.getAllKeys();
+      existingKeys.onsuccess = () => {
+        const keys = existingKeys.result;
+        if (keys.length > MAX_REQUEST_RECORDS) {
+          for (const key of keys.slice(0, keys.length - MAX_REQUEST_RECORDS)) {
+            requests.delete(key);
+          }
+        }
+      };
+    };
+
+    request.onsuccess = (event) => {
+      const database = event.target.result;
+      database.onversionchange = () => database.close();
+      resolve(database);
+    };
+
+    request.onerror = (event) => {
+      databasePromise = null;
+      reject(event.target.error || new Error('Could not open local request storage.'));
+    };
+
+    request.onblocked = () => {
+      databasePromise = null;
+      reject(new Error('Database upgrade is blocked by another open extension page.'));
+    };
+  });
+
+  return databasePromise;
 }
 
-
-// --- Generic Add/Get Functions ---
-
-/**
- * Adds an item to an object store. If an item with a unique index already exists, it returns the existing item.
- * @param {string} storeName - The name of the object store.
- * @param {object} item - The item to add.
- * @param {string} uniqueIndexName - The name of a unique index to check for existence (e.g., 'url' for trackers, 'name' for domains).
- * @param {any} uniqueIndexValue - The value to check against the unique index.
- * @returns {Promise<object>} A promise that resolves with the added or existing item (including its keyPath ID).
- */
-async function addOrGetExisting(storeName, item, uniqueIndexName = null, uniqueIndexValue = null) {
-    const db = await getDB();
-    const transaction = db.transaction([storeName], 'readwrite');
-    const store = transaction.objectStore(storeName);
-
-    return new Promise(async (resolve, reject) => {
-        if (uniqueIndexName && uniqueIndexValue !== null) {
-            const index = store.index(uniqueIndexName);
-            const getRequest = index.get(uniqueIndexValue);
-
-            getRequest.onsuccess = async (event) => {
-                const existingItem = event.target.result;
-                if (existingItem) {
-                    resolve(existingItem); // Item already exists
-                } else {
-                    const addRequest = store.add(item);
-                    addRequest.onsuccess = (event) => {
-                        item.id = event.target.result; // Add the generated ID to the item
-                        resolve(item);
-                    };
-                    addRequest.onerror = (event) => reject(event.target.error);
-                }
-            };
-            getRequest.onerror = (event) => reject(event.target.error);
-        } else {
-            const addRequest = store.add(item);
-            addRequest.onsuccess = (event) => {
-                item.id = event.target.result;
-                resolve(item);
-            };
-            addRequest.onerror = (event) => reject(event.target.error);
-        }
-    });
+function readRequest(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
 }
 
-/**
- * Gets all items from an object store.
- * @param {string} storeName - The name of the object store.
- * @returns {Promise<Array<object>>} A promise that resolves with an array of all items.
- */
-async function getAllItems(storeName) {
-    const db = await getDB();
-    const transaction = db.transaction([storeName], 'readonly');
-    const store = transaction.objectStore(storeName);
-    const request = store.getAll();
-
-    return new Promise((resolve, reject) => {
-        request.onsuccess = (event) => resolve(event.target.result);
-        request.onerror = (event) => reject(event.target.error);
-    });
+function storedUrl(value) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return '';
+  }
 }
 
-/**
- * Clears all data from specified object stores.
- * @param {Array<string>} storeNames - An array of object store names to clear.
- * @returns {Promise<void>} A promise that resolves when all stores are cleared.
- */
-async function clearStores(storeNames) {
-    const db = await getDB();
-    const transaction = db.transaction(storeNames, 'readwrite');
-
-    return Promise.all(storeNames.map(storeName => {
-        return new Promise((resolve, reject) => {
-            const store = transaction.objectStore(storeName);
-            const request = store.clear();
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject(event.target.error);
-        });
-    }));
+function incrementActionCounts(record, action) {
+  const next = { ...record, requestCount: (record.requestCount || 0) + 1 };
+  if (action === 'BLOCKED') next.blockedCount = (next.blockedCount || 0) + 1;
+  if (action === 'FLAGGED') next.flaggedCount = (next.flaggedCount || 0) + 1;
+  if (action === 'ALLOWED') next.allowedCount = (next.allowedCount || 0) + 1;
+  return next;
 }
 
+export async function initializeStorage() {
+  await openDatabase();
+}
 
-// Export functions for use in background.js and popup.js
-export {
-    openPrivacyDashboardDB,
-    getDB,
-    addOrGetExisting,
-    getAllItems,
-    clearStores,
-    OBJECT_STORE_TRACKERS,
-    OBJECT_STORE_REQUESTS,
-    OBJECT_STORE_DOMAINS,
-    OBJECT_STORE_REQUEST_DATA_TYPES
-};
+export async function recordRequest(analysis, decision) {
+  if (!analysis?.domain || !analysis?.siteDomain) return;
+
+  const database = await openDatabase();
+  const transaction = database.transaction(
+    [REQUEST_STORE, TRACKER_STORE, SITE_STORE],
+    'readwrite'
+  );
+  const requests = transaction.objectStore(REQUEST_STORE);
+  const trackers = transaction.objectStore(TRACKER_STORE);
+  const sites = transaction.objectStore(SITE_STORE);
+  const action = decision?.action || 'ALLOWED';
+  const trackerId = analysis.trackerId || analysis.domain;
+  const requestRecord = {
+    url: storedUrl(analysis.url),
+    domain: analysis.domain,
+    siteDomain: analysis.siteDomain,
+    type: analysis.type || 'other',
+    timestamp: new Date().toISOString(),
+    action,
+    trackerId,
+    trackerName: analysis.trackerName || analysis.domain,
+    company: analysis.company,
+    category: analysis.category || 'Unknown',
+    purpose: analysis.purpose,
+    confidence: decision?.confidence ?? analysis.confidence ?? 0,
+    signals: Array.isArray(decision?.signals) ? decision.signals : [],
+    isTracker: Boolean(analysis.isTracker),
+    policy: decision?.policy || 'ALLOW',
+    reason: decision?.reason || '',
+    tabId: analysis.tabId
+  };
+
+  requests.add(requestRecord);
+  const keysRequest = requests.getAllKeys();
+  keysRequest.onsuccess = () => {
+    const keys = keysRequest.result;
+    if (keys.length > MAX_REQUEST_RECORDS) {
+      for (const key of keys.slice(0, keys.length - MAX_REQUEST_RECORDS)) {
+        requests.delete(key);
+      }
+    }
+  };
+
+  const trackerRequest = trackers.index('url').get(analysis.domain);
+  trackerRequest.onsuccess = () => {
+    const existing = trackerRequest.result || {
+      url: analysis.domain,
+      name: analysis.trackerName || analysis.domain,
+      domain: analysis.domain,
+      requestCount: 0,
+      blockedCount: 0,
+      allowedCount: 0,
+      flaggedCount: 0
+    };
+    trackers.put(incrementActionCounts({
+      ...existing,
+      domain: analysis.domain,
+      company: analysis.company || existing.company || null,
+      category: analysis.category || existing.category || 'Unknown',
+      purpose: analysis.purpose || existing.purpose || null,
+      trackerId
+    }, action));
+  };
+
+  const siteRequest = sites.get(analysis.siteDomain);
+  siteRequest.onsuccess = () => {
+    const existing = siteRequest.result || {
+      domain: analysis.siteDomain,
+      protectionEnabled: true,
+      requestCount: 0,
+      blockedCount: 0,
+      allowedCount: 0,
+      flaggedCount: 0
+    };
+    sites.put(incrementActionCounts(existing, action));
+  };
+
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error('Request storage transaction aborted.'));
+  });
+}
+
+export async function getSiteData(domain) {
+  if (!domain) return { site: null, requests: [] };
+
+  const database = await openDatabase();
+  const transaction = database.transaction([REQUEST_STORE, SITE_STORE], 'readonly');
+  const requestsRequest = transaction.objectStore(REQUEST_STORE).getAll();
+  const siteRequest = transaction.objectStore(SITE_STORE).get(domain);
+  const [allRequests, site] = await Promise.all([
+    readRequest(requestsRequest),
+    readRequest(siteRequest)
+  ]);
+
+  const requests = allRequests
+    .filter((request) => request.siteDomain === domain)
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+  return { site: site || null, requests };
+}
+
+export async function getTrackerData(domain) {
+  if (!domain) return null;
+  const database = await openDatabase();
+  const transaction = database.transaction(TRACKER_STORE, 'readonly');
+  return readRequest(transaction.objectStore(TRACKER_STORE).index('url').get(domain));
+}
+
+export async function clearStatistics() {
+  const database = await openDatabase();
+  const storeNames = [REQUEST_STORE, TRACKER_STORE, SITE_STORE];
+  for (const legacyStore of ['domains', 'requestDataTypes']) {
+    if (database.objectStoreNames.contains(legacyStore)) storeNames.push(legacyStore);
+  }
+
+  const transaction = database.transaction(storeNames, 'readwrite');
+  for (const name of storeNames) transaction.objectStore(name).clear();
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error('Storage clear aborted.'));
+  });
+}

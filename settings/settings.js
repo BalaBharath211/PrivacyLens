@@ -1,122 +1,95 @@
-function normalizeHostname(value) {
-  if (typeof value !== 'string') return null;
+const globalProtection = document.getElementById('globalProtection');
+const protectionLevel = document.getElementById('protectionLevel');
+const heuristicDetection = document.getElementById('heuristicDetection');
+const allowlistedSites = document.getElementById('allowlistedSites');
+const globalAllowlist = document.getElementById('globalAllowlist');
+const blockedDomains = document.getElementById('blockedDomains');
+const status = document.getElementById('status');
 
-  const candidate = value
-    .trim()
-    .toLowerCase()
-    .replace(/^\|\|/, '')
-    .replace(/^\|/, '')
-    .replace(/\^.*$/, '')
-    .replace(/^\*\./, '');
+async function sendAction(action, values = {}) {
+  const response = await chrome.runtime.sendMessage({ action, ...values });
+  if (response?.success === false) throw new Error(response.message || 'Settings update failed.');
+  return response;
+}
 
-  try {
-    return new URL(
-      candidate.includes('://') ? candidate : `https://${candidate}`
-    ).hostname;
-  } catch {
-    return null;
+function renderDomainList(container, domains, action, label) {
+  container.replaceChildren();
+  if (!domains.length) {
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = 'No domains added.';
+    container.append(empty);
+    return;
+  }
+
+  for (const domain of domains) {
+    const item = document.createElement('li');
+    item.className = 'domain-item';
+    const text = document.createElement('span');
+    text.textContent = domain;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = label;
+    remove.addEventListener('click', async () => {
+      try {
+        if (action === 'removeGlobalTracker') {
+          const settings = await sendAction('getSettings');
+          await sendAction('updateSettings', {
+            settings: { globalAllowlist: settings.globalAllowlist.filter((value) => value !== domain) }
+          });
+        } else {
+          await sendAction(action, { domain, siteDomain: domain, trusted: false, blocked: false });
+        }
+        await loadSettings();
+        status.textContent = 'Updated.';
+      } catch (error) { status.textContent = error.message; }
+    });
+    item.append(text, remove);
+    container.append(item);
   }
 }
-// Get references to our HTML elements
-const heuristicToggle = document.getElementById('heuristic-toggle');
-const dynamicDomainList = document.getElementById('dynamic-domain-list');
 
-// Function to load and display the dynamically added rules
-const loadDynamicRules = async () => {
-    // Clear the current list to prevent duplicates on reload
-    dynamicDomainList.innerHTML = '';
-
-    const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
-
-    if (dynamicRules.length === 0) {
-        dynamicDomainList.innerHTML = '<li>No domains have been blocked by the heuristic engine yet.</li>';
-        return;
-    }
-
-    // Get the allowlist to check if a rule is technically still active but should be ignored
-    const { allowlist = [] } = await chrome.storage.local.get('allowlist');
-
-    dynamicRules.forEach(rule => {
-        // We assume the domain is stored in the rule's condition
-        const domain = normalizeHostname(rule.condition.urlFilter);
-        if (!domain) return;        
-        // Skip rendering if this domain is already on the allowlist
-        if(allowlist.includes(domain)) return;
-
-        const listItem = document.createElement('li');
-        listItem.className = 'domain-item';
-
-        const domainSpan = document.createElement('span');
-        domainSpan.textContent = domain;
-
-        const allowButton = document.createElement('button');
-        allowButton.textContent = 'Allow';
-        allowButton.className = 'allow-btn';
-        // Store the rule ID and domain on the button itself for easy access
-        allowButton.dataset.ruleId = rule.id;
-        allowButton.dataset.domain = domain;
-        
-        allowButton.addEventListener('click', handleAllowDomain);
-
-        listItem.appendChild(domainSpan);
-        listItem.appendChild(allowButton);
-        dynamicDomainList.appendChild(listItem);
-    });
-};
-
-// Function to handle the "Allow" button click
-const handleAllowDomain = async (event) => {
-  const { ruleId, domain: rawDomain } = event.target.dataset;
-  const domain = normalizeHostname(rawDomain);
-
-  if (!domain) return;
-
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: [parseInt(ruleId, 10)]
-  });
-
-  const { allowlist = [], dynamicallyAddedRules = {} } =
-    await chrome.storage.local.get([
-      'allowlist',
-      'dynamicallyAddedRules'
-    ]);
-
-  const normalizedAllowlist = [
-    ...new Set(allowlist.map(normalizeHostname).filter(Boolean))
-  ];
-
-  if (!normalizedAllowlist.includes(domain)) {
-    normalizedAllowlist.push(domain);
+async function loadSettings() {
+  try {
+    const settings = await sendAction('getSettings');
+    globalProtection.checked = settings.globalProtection !== false;
+    protectionLevel.value = settings.protectionLevel === 'strict' ? 'strict' : 'balanced';
+    heuristicDetection.checked = settings.heuristicDetection !== false;
+    renderDomainList(allowlistedSites, settings.allowlistedSites || [], 'trustSite', 'Remove trust');
+    renderDomainList(globalAllowlist, settings.globalAllowlist || [], 'removeGlobalTracker', 'Remove allow');
+    renderDomainList(blockedDomains, settings.blocklist || [], 'setTrackerBlockedGlobally', 'Unblock');
+  } catch (error) {
+    status.textContent = error.message || 'Could not load settings.';
   }
+}
 
-  for (const key of Object.keys(dynamicallyAddedRules)) {
-    if (normalizeHostname(key) === domain) {
-      delete dynamicallyAddedRules[key];
-    }
+async function saveSettings(patch) {
+  status.textContent = '';
+  try {
+    await sendAction('updateSettings', { settings: patch });
+    status.textContent = 'Saved.';
+  } catch (error) {
+    status.textContent = error.message || 'Could not save settings.';
   }
+}
 
-  await chrome.storage.local.set({
-    allowlist: normalizedAllowlist,
-    dynamicallyAddedRules
-  });
+globalProtection.addEventListener('change', () => {
+  saveSettings({ globalProtection: globalProtection.checked });
+});
+protectionLevel.addEventListener('change', () => {
+  saveSettings({ protectionLevel: protectionLevel.value });
+});
+heuristicDetection.addEventListener('change', () => {
+  saveSettings({ heuristicDetection: heuristicDetection.checked });
+});
 
-  loadDynamicRules();
-};
+document.getElementById('resetSettings').addEventListener('click', async () => {
+  if (!confirm('Reset protection settings and remove all site exceptions?')) return;
+  try {
+    await sendAction('resetSettings');
+    await loadSettings();
+    status.textContent = 'Settings reset.';
+  } catch (error) { status.textContent = error.message; }
+});
 
-// Main function to initialize the page
-const initializeSettings = async () => {
-    // Load and set the current state of the heuristic toggle
-    const { isHeuristicEngineEnabled = true } = await chrome.storage.local.get('isHeuristicEngineEnabled');
-    heuristicToggle.checked = isHeuristicEngineEnabled;
-
-    // Add event listener for the toggle
-    heuristicToggle.addEventListener('change', () => {
-        chrome.storage.local.set({ isHeuristicEngineEnabled: heuristicToggle.checked });
-    });
-
-    // Load the list of dynamically blocked domains
-    loadDynamicRules();
-};
-
-// Run the initialization function when the document is loaded
-document.addEventListener('DOMContentLoaded', initializeSettings);
+loadSettings();
