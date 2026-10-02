@@ -8,8 +8,5 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@adguard/tsurlfilter": "^3.4.6"
-  }
+  "license": "ISC"
 }
