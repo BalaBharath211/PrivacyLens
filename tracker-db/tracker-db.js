@@ -44,10 +44,6 @@ export function findTracker(domain, url = '') {
   return { id: pattern, domain: pattern, ...record, url };
 }
 
-export function getTrackerCategory(domain, url = '') {
-  return findTracker(domain, url)?.category ?? 'Unknown';
-}
-
 export function getTrackerCompany(domain, url = '') {
   return findTracker(domain, url)?.company ?? null;
 }
