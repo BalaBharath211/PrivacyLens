@@ -2,7 +2,10 @@ import { getTrackerCatalog } from '../tracker-db/tracker-db.js';
 
 const MANAGED_RULE_START = 500000;
 const MANAGED_RULE_END = 505000;
+// Conservative internal cap: Chrome 121+ allows up to 30,000 safe dynamic rules,
+// while older versions retain a 5,000 dynamic/session combined limit.
 const MAX_DYNAMIC_RULES = 5000;
+const RULE_CAPACITY_WARNING_KEY = 'ruleCapacityWarning';
 const LEGACY_RULE_START = 10000;
 const ALLOWED_RESOURCE_TYPES = [
   'main_frame', 'sub_frame', 'stylesheet', 'script', 'image', 'font',
@@ -127,7 +130,16 @@ function buildPolicyRules(settings) {
     const existing = uniqueRules.get(key);
     if (!existing || rule.priority > existing.priority) uniqueRules.set(key, rule);
   }
-  return [...uniqueRules.values()].slice(0, MAX_DYNAMIC_RULES);
+  const prioritizedRules = [...uniqueRules.values()].sort((left, right) =>
+    right.priority - left.priority
+  );
+  const dropped = Math.max(0, prioritizedRules.length - MAX_DYNAMIC_RULES);
+  return {
+    rules: prioritizedRules.slice(0, MAX_DYNAMIC_RULES),
+    warning: dropped > 0
+      ? { truncated: true, dropped, limit: MAX_DYNAMIC_RULES }
+      : null
+  };
 }
 
 async function reconcileRules(settings) {
@@ -150,10 +162,20 @@ async function reconcileRules(settings) {
     !rule.condition.initiatorDomains
   );
   const removeRuleIds = [...managedRules, ...legacyHeuristicRules].map((rule) => rule.id);
-  const addRules = buildPolicyRules(settings).map((rule, index) => ({
+  const { rules, warning } = buildPolicyRules(settings);
+  const addRules = rules.map((rule, index) => ({
     ...rule,
     id: MANAGED_RULE_START + index
   }));
+
+  if (warning) {
+    await chrome.storage.local.set({ [RULE_CAPACITY_WARNING_KEY]: warning });
+    console.warn(
+      `PrivacyLens rule cap reached: dropped ${warning.dropped} of ${warning.limit + warning.dropped} generated rules (limit ${warning.limit}).`
+    );
+  } else {
+    await chrome.storage.local.remove([RULE_CAPACITY_WARNING_KEY]);
+  }
 
   if (removeRuleIds.length || addRules.length) {
     await chrome.declarativeNetRequest.updateDynamicRules({

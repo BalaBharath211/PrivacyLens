@@ -23,6 +23,7 @@ DNR performs blocking before extension JavaScript observes a request. The servic
 - `background/rule-manager.js`: dynamic DNR policy reconciliation and exception priorities.
 - `tracker-db/trackers.json`: small, original tracker/service catalog.
 - `tracker-db/tracker-db.js`: cached domain matching and supported categories.
+- `tracker-db/tldts-bundle.js`: locally bundled Public Suffix List fallback, including private suffixes.
 - `storage/indexedDB.js`: bounded request history and aggregated site/tracker counts.
 - `storage/settings.js`: extension policy settings and bounded cross-site observations.
 - `popup/`: primary protection controls, activity categories, and tracker details.
@@ -34,10 +35,19 @@ The request history is capped at 500 records. Query strings and URL fragments ar
 
 ## Load locally
 
+Install dependencies and build the local `tldts` module bundle before loading the extension:
+
+```sh
+npm install
+npm run build:tldts
+```
+
 1. Open `chrome://extensions` or `edge://extensions`.
 2. Enable Developer mode.
 3. Select **Load unpacked** and choose this project directory.
 4. Open the extension popup on a normal website to inspect activity and adjust site controls.
+
+The worker uses `chrome.publicSuffix.getDomain` if that API is exposed, then falls back to the bundled `tldts` Public Suffix List with private domains enabled. The API requires Chrome 153+ and the `publicSuffix` permission; this project does not declare that version-specific permission because compatibility with older Chrome releases is not confirmed, so the local fallback remains the supported path.
 
 ## Manual verification
 

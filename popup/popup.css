@@ -104,11 +104,13 @@ button { color: inherit; }
 .tracker-copy { display: grid; flex: 1; min-width: 0; gap: 2px; }
 .tracker-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .tracker-copy small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
-.tracker-count { min-width: 22px; color: var(--muted); text-align: right; font-size: 10px; }
+.tracker-count { min-width: 54px; color: var(--muted); text-align: right; white-space: nowrap; font-size: 9px; }
+.classification-label { color: var(--green); font-size: 8px !important; font-weight: 800; }
 .status-tag { min-width: 58px; padding: 4px 5px; border-radius: 3px; text-align: center; font-size: 8px; font-weight: 900; }
 .status-blocked { color: #8e3026; background: var(--coral-soft); }
 .status-allowed { color: #315f43; background: var(--green-soft); }
 .status-flagged { color: var(--amber); background: var(--amber-soft); }
+.status-possible { color: #6a5b34; background: #f2eddb; }
 .empty-state { margin: 0; padding: 15px 4px; color: var(--muted); text-align: center; }
 
 .summary {

@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy Lens</title>
   <style>
     body {
@@ -110,10 +112,11 @@
 
     footer a:hover {
       text-decoration: underline;
+    }
     </style>
     <link rel="stylesheet" href="popup.css">
-  </style>
 </head>
+<body>
     <main class="popup-shell">
       <header class="topbar">
         <div class="brand">
@@ -143,16 +146,16 @@
       </section>
 
       <section class="activity" aria-label="Request activity">
-        <div class="section-heading"><h2>Third-party activity</h2><span id="pageBlocked" class="page-count">0 blocked this page</span></div>
+        <div class="section-heading"><h2>Recent activity</h2><span id="recentCount" class="page-count">0 retained requests</span></div>
+        <p id="pageBlocked" class="page-count">0 PrivacyLens rule matches this page</p>
         <div id="trackerList" class="tracker-list" aria-live="polite">
           <p class="empty-state">Loading activity...</p>
         </div>
       </section>
 
       <section class="summary" aria-label="Request totals">
-        <div><strong id="blockedCount">0</strong><span>Blocked</span></div>
-        <div><strong id="allowedCount">0</strong><span>Allowed</span></div>
-        <div><strong id="flaggedCount">0</strong><span>Flagged</span></div>
+        <div><strong id="totalBlockedCount">0</strong><span>Total blocked</span></div>
+        <div><strong id="totalDetectedCount">0</strong><span>Total detected</span></div>
       </section>
 
       <section id="trackerDetail" class="detail-panel" aria-live="polite" hidden>
@@ -163,7 +166,7 @@
         <dl>
           <div><dt>Company</dt><dd id="detailCompany">Unknown</dd></div>
           <div><dt>Purpose</dt><dd id="detailPurpose">Unknown</dd></div>
-          <div><dt>Requests</dt><dd id="detailRequests">0</dd></div>
+          <div><dt>Recent requests</dt><dd id="detailRequests">0</dd></div>
           <div><dt>Latest status</dt><dd id="detailStatus">ALLOWED</dd></div>
         </dl>
         <button id="allowTracker" class="action-button" type="button">Allow on this site</button>
@@ -173,6 +176,5 @@
       <p id="errorMessage" class="error-message" role="status" hidden></p>
     </main>
     <script type="module" src="popup.js"></script>
-  <script type="module" src="popup.js"></script>
 </body>
 </html>

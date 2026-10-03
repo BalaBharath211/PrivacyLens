@@ -5,6 +5,7 @@ const allowlistedSites = document.getElementById('allowlistedSites');
 const globalAllowlist = document.getElementById('globalAllowlist');
 const blockedDomains = document.getElementById('blockedDomains');
 const status = document.getElementById('status');
+const ruleCapacityWarning = document.getElementById('ruleCapacityWarning');
 
 async function sendAction(action, values = {}) {
   const response = await chrome.runtime.sendMessage({ action, ...values });
@@ -58,6 +59,16 @@ async function loadSettings() {
     renderDomainList(allowlistedSites, settings.allowlistedSites || [], 'trustSite', 'Remove trust');
     renderDomainList(globalAllowlist, settings.globalAllowlist || [], 'removeGlobalTracker', 'Remove allow');
     renderDomainList(blockedDomains, settings.blocklist || [], 'setTrackerBlockedGlobally', 'Unblock');
+    if (settings.ruleCapacityWarning?.truncated) {
+      const warning = settings.ruleCapacityWarning;
+      ruleCapacityWarning.textContent =
+        `Rule cap reached: ${warning.dropped} lower-priority rules were omitted. ` +
+        `The internal limit is ${warning.limit}; some policy rules may be inactive.`;
+      ruleCapacityWarning.hidden = false;
+    } else {
+      ruleCapacityWarning.textContent = '';
+      ruleCapacityWarning.hidden = true;
+    }
   } catch (error) {
     status.textContent = error.message || 'Could not load settings.';
   }
@@ -67,6 +78,7 @@ async function saveSettings(patch) {
   status.textContent = '';
   try {
     await sendAction('updateSettings', { settings: patch });
+    await loadSettings();
     status.textContent = 'Saved.';
   } catch (error) {
     status.textContent = error.message || 'Could not save settings.';
@@ -84,12 +96,23 @@ heuristicDetection.addEventListener('change', () => {
 });
 
 document.getElementById('resetSettings').addEventListener('click', async () => {
-  if (!confirm('Reset protection settings and remove all site exceptions?')) return;
+  if (!confirm('Reset protection settings and remove all site exceptions? Activity data will be kept.')) return;
   try {
     await sendAction('resetSettings');
     await loadSettings();
     status.textContent = 'Settings reset.';
   } catch (error) { status.textContent = error.message; }
+});
+
+document.getElementById('clearActivityData').addEventListener('click', async () => {
+  if (!confirm('Clear request history, site and tracker counts, and heuristic observations?')) return;
+  status.textContent = '';
+  try {
+    await sendAction('clearData');
+    status.textContent = 'Activity data cleared.';
+  } catch (error) {
+    status.textContent = error.message || 'Could not clear activity data.';
+  }
 });
 
 loadSettings();

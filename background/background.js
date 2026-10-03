@@ -7,7 +7,13 @@ import { classifyHeuristic } from './heuristic-tracker-detection.js';
 import { decideRequest } from './risk-engine.js';
 import { synchronizeRules } from './rule-manager.js';
 import {
+  createBlockEventReporter,
+  createMatchedRuleConfirmer,
+  isOurBlockingRule
+} from './block-reporting.js';
+import {
   getSettings,
+  clearHeuristicObservations,
   observeThirdParty,
   setSiteProtection,
   setSiteTrackerException,
@@ -17,17 +23,27 @@ import {
   clearStatistics,
   getSiteData,
   initializeStorage,
-  recordRequest
+  pruneStatistics,
+  recordRequest,
+  upgradePossibleBlock
 } from '../storage/indexedDB.js';
 import { initializeTrackerDB } from '../tracker-db/tracker-db.js';
+import { createPopupRefreshNotifier } from './popup-refresh.js';
+import {
+  buildActivitySummary,
+  classifyActivityRecord,
+  getActivityCategory
+} from './activity-model.js';
 
 const LEGACY_STORAGE_KEYS = [
   'heuristicTrackers', 'dynamicallyAddedRules', 'nextRuleId',
   'isHeuristicEngineEnabled', 'allowlist', 'settings'
 ];
+const AGGREGATE_PRUNE_ALARM = 'privacy-lens-prune-aggregates';
 let readyPromise;
-let badgeQueue = Promise.resolve();
-const processedBlockRequests = new Map();
+const popupRefreshNotifier = createPopupRefreshNotifier({
+  sendMessage: (message) => chrome.runtime.sendMessage(message)
+});
 
 function ensureReady() {
   if (!readyPromise) {
@@ -42,58 +58,24 @@ function ensureReady() {
 async function initializeRuntime() {
   await initializeTrackerDB();
   await initializeStorage();
+  await pruneStatistics();
+  chrome.alarms.create(AGGREGATE_PRUNE_ALARM, { periodInMinutes: 60 });
   const settings = await getSettings();
   await updateSettings(settings);
   await synchronizeRules(settings);
+  if (typeof chrome.declarativeNetRequest.setExtensionActionOptions === 'function') {
+    try {
+      await chrome.declarativeNetRequest.setExtensionActionOptions({
+        displayActionCountAsBadgeText: true
+      });
+    } catch (error) {
+      console.warn('Could not enable the DNR action-count badge:', error);
+    }
+  }
   await chrome.storage.local.remove(LEGACY_STORAGE_KEYS);
 }
 
-function sendPopupRefresh() {
-  chrome.runtime.sendMessage({ action: 'requestRecorded' }).catch(() => {});
-}
-
-async function updateTabBadge(tabId, count) {
-  if (!Number.isInteger(tabId) || tabId < 0) return;
-  const text = count > 99 ? '99+' : count > 0 ? String(count) : '';
-  await chrome.action.setBadgeText({ tabId, text });
-  await chrome.action.setBadgeBackgroundColor({
-    tabId,
-    color: '#b74432'
-  });
-}
-
-async function incrementBlockedBadge(tabId) {
-  if (!Number.isInteger(tabId) || tabId < 0 || !chrome.storage.session) return;
-  const operation = badgeQueue.then(async () => {
-    const { blockedByTab = {} } = await chrome.storage.session.get('blockedByTab');
-    const nextCount = (blockedByTab[tabId] || 0) + 1;
-    blockedByTab[tabId] = nextCount;
-    await chrome.storage.session.set({ blockedByTab });
-    await updateTabBadge(tabId, nextCount);
-  });
-  badgeQueue = operation.catch((error) => {
-    console.error('Could not increment blocked request badge:', error);
-  });
-  return operation;
-}
-
-async function resetTabBadge(tabId) {
-  if (!Number.isInteger(tabId) || tabId < 0) return;
-  const operation = badgeQueue.then(async () => {
-    if (chrome.storage.session) {
-      const { blockedByTab = {} } = await chrome.storage.session.get('blockedByTab');
-      delete blockedByTab[tabId];
-      await chrome.storage.session.set({ blockedByTab });
-    }
-    await updateTabBadge(tabId, 0);
-  });
-  badgeQueue = operation.catch((error) => {
-    console.error('Could not reset blocked request badge:', error);
-  });
-  return operation;
-}
-
-async function processRequest(details, blockedByDnr = false) {
+async function processRequest(details, outcomeOverride = null) {
   await ensureReady();
   const analysis = analyzeRequest(details);
   if (!analysis.isThirdParty || !analysis.domain || !analysis.siteDomain) return;
@@ -112,16 +94,41 @@ async function processRequest(details, blockedByDnr = false) {
     );
   }
 
-  const decision = decideRequest(analysis, settings, heuristic, blockedByDnr);
+  const decision = outcomeOverride || decideRequest(analysis, settings, heuristic);
   await recordRequest(analysis, {
     ...decision,
     confidence: heuristic.confidence,
     signals: heuristic.signals
   });
 
-  if (blockedByDnr) await incrementBlockedBadge(analysis.tabId);
-  sendPopupRefresh();
+  popupRefreshNotifier.notify();
 }
+
+const blockEventReporter = createBlockEventReporter({
+  onPossibleBlock: (details) => processRequest(details, {
+    action: 'possibleBlock',
+    policy: 'POSSIBLE_BLOCK',
+    reason: 'ERR_BLOCKED_BY_CLIENT is a best-effort signal; another client may have blocked the request.'
+  }),
+  onConfirmedBlock: (details) => processRequest(details, {
+    action: 'BLOCKED',
+    policy: 'BLOCK',
+    reason: 'A PrivacyLens DNR block rule matched this request.'
+  }),
+  onUpgradePossibleBlock: (details) => upgradePossibleBlock(details.requestId)
+});
+
+const confirmMatchedRulesForTab = createMatchedRuleConfirmer({
+  getMatchedRules: chrome.declarativeNetRequest.getMatchedRules?.bind(
+    chrome.declarativeNetRequest
+  ),
+  isOurBlockingRule: (rule) => isOurBlockingRule(rule, {
+    staticRulesetIds: ['ruleset_1'],
+    dynamicRulesetId: chrome.declarativeNetRequest.DYNAMIC_RULESET_ID || '_dynamic',
+    getDynamicRules: () => chrome.declarativeNetRequest.getDynamicRules()
+  }),
+  sessionStorage: chrome.storage.session
+});
 
 chrome.webRequest.onCompleted.addListener((details) => {
   processRequest(details).catch((error) => {
@@ -131,32 +138,17 @@ chrome.webRequest.onCompleted.addListener((details) => {
 
 if (chrome.declarativeNetRequest?.onRuleMatchedDebug) {
   chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
-    if (info?.rule?.action?.type !== 'block') return;
-    const request = info?.request;
-    if (!request) return;
-    if (request.requestId != null) {
-      const key = `${request.tabId}:${request.requestId}`;
-      const now = Date.now();
-      if (processedBlockRequests.has(key)) return;
-      processedBlockRequests.set(key, now);
-      for (const [processedKey, timestamp] of processedBlockRequests) {
-        if (now - timestamp > 5000) processedBlockRequests.delete(processedKey);
-      }
-      while (processedBlockRequests.size > 1000) {
-        processedBlockRequests.delete(processedBlockRequests.keys().next().value);
-      }
-    }
-    processRequest({
-      url: request.url,
-      initiator: request.initiator,
-      type: request.type || request.resourceType,
-      tabId: request.tabId,
-      requestId: request.requestId
-    }, true).catch((error) => {
-      console.error('Could not record a DNR-blocked request:', error);
-    });
+    isOurBlockingRule(info?.rule)
+      .then((isBlockRule) => blockEventReporter.handleDebug(info, isBlockRule))
+      .catch((error) => console.error('Could not record a DNR rule match:', error));
   });
 }
+
+chrome.webRequest.onErrorOccurred.addListener((details) => {
+  blockEventReporter.handleError(details).catch((error) => {
+    console.error('Could not record a possible blocked request:', error);
+  });
+}, { urls: ['<all_urls>'] });
 
 async function activeTabContext(message) {
   const parsed = analyzeRequest({
@@ -174,12 +166,14 @@ function summarizeRequests(requests) {
     const key = request.trackerId || request.domain;
     let group = groups.get(key);
     if (!group) {
+      const classification = classifyActivityRecord(request);
       group = {
         id: key,
         domain: request.domain,
         trackerName: request.trackerName || request.domain,
         company: request.company || null,
-        category: request.category || 'Unknown',
+        category: getActivityCategory(request),
+        classification,
         purpose: request.purpose || null,
         confidence: request.confidence || 0,
         requestCount: 0,
@@ -204,11 +198,8 @@ async function getPopupData(message) {
   const settings = await getSettings();
   if (!context) return { siteDomain: null, settings, requests: [], trackers: [], summary: {} };
 
+  const matchedRules = await confirmMatchedRulesForTab(context.tabId);
   const { site, requests } = await getSiteData(context.siteDomain);
-  const session = chrome.storage.session
-    ? await chrome.storage.session.get('blockedByTab')
-    : {};
-  const blockedByTab = session.blockedByTab || {};
   const siteSettings = settings.sites[context.siteDomain] || {};
   const siteTrusted = settings.allowlistedSites.includes(context.siteDomain);
 
@@ -222,10 +213,9 @@ async function getPopupData(message) {
     requests,
     trackers: summarizeRequests(requests),
     summary: {
-      blocked: site?.blockedCount || 0,
-      allowed: site?.allowedCount || 0,
-      flagged: site?.flaggedCount || 0,
-      blockedThisPage: blockedByTab[context.tabId] || 0
+      ...buildActivitySummary(site, requests),
+      possibleBlock: site?.possibleBlockCount || 0,
+      blockedThisPage: matchedRules.matchedRuleCount || 0
     }
   };
 }
@@ -234,7 +224,12 @@ async function handleMessage(message) {
   await ensureReady();
 
   if (message.action === 'getPopupData') return getPopupData(message);
-  if (message.action === 'getSettings') return getSettings();
+  if (message.action === 'getSettings') {
+    const settings = await getSettings();
+    const { ruleCapacityWarning = null } =
+      await chrome.storage.local.get('ruleCapacityWarning');
+    return { ...settings, ruleCapacityWarning };
+  }
 
   if (message.action === 'setGlobalProtection') {
     const settings = await updateSettings({ globalProtection: Boolean(message.enabled) });
@@ -281,12 +276,14 @@ async function handleMessage(message) {
   if (message.action === 'updateSettings') {
     const settings = await updateSettings(message.settings || {});
     await synchronizeRules(settings);
-    return { success: true, settings };
+    const { ruleCapacityWarning = null } =
+      await chrome.storage.local.get('ruleCapacityWarning');
+    return { success: true, settings, ruleCapacityWarning };
   }
 
   if (message.action === 'clearData') {
     await clearStatistics();
-    if (chrome.storage.session) await chrome.storage.session.remove('blockedByTab');
+    await clearHeuristicObservations();
     return { success: true };
   }
 
@@ -328,26 +325,19 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading') {
-    resetTabBadge(tabId).catch((error) => console.error('Could not reset tab badge:', error));
-  }
-});
-
-chrome.tabs.onActivated.addListener(async ({ tabId }) => {
-  if (!chrome.storage.session) return;
-  try {
-    const { blockedByTab = {} } = await chrome.storage.session.get('blockedByTab');
-    await updateTabBadge(tabId, blockedByTab[tabId] || 0);
-  } catch (error) {
-    console.error('Could not restore active-tab badge:', error);
+    confirmMatchedRulesForTab.resetTab(tabId);
   }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  if (!chrome.storage.session) return;
-  chrome.storage.session.get('blockedByTab').then(({ blockedByTab = {} }) => {
-    delete blockedByTab[tabId];
-    return chrome.storage.session.set({ blockedByTab });
-  }).catch((error) => console.error('Could not remove closed-tab badge state:', error));
+  confirmMatchedRulesForTab.resetTab(tabId);
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== AGGREGATE_PRUNE_ALARM) return;
+  pruneStatistics().catch((error) => {
+    console.error('Could not prune old aggregate statistics:', error);
+  });
 });
 
 ensureReady().catch((error) => console.error('Background initialization failed:', error));

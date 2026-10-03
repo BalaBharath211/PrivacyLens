@@ -1,3 +1,5 @@
+import { createRefreshCoalescer } from './refresh-coalescer.js';
+
 const elements = {
   siteDomain: document.getElementById('siteDomain'),
   siteState: document.getElementById('siteState'),
@@ -5,10 +7,10 @@ const elements = {
   siteProtection: document.getElementById('siteProtection'),
   trustSite: document.getElementById('trustSite'),
   trackerList: document.getElementById('trackerList'),
+  recentCount: document.getElementById('recentCount'),
   pageBlocked: document.getElementById('pageBlocked'),
-  blockedCount: document.getElementById('blockedCount'),
-  allowedCount: document.getElementById('allowedCount'),
-  flaggedCount: document.getElementById('flaggedCount'),
+  totalBlockedCount: document.getElementById('totalBlockedCount'),
+  totalDetectedCount: document.getElementById('totalDetectedCount'),
   trackerDetail: document.getElementById('trackerDetail'),
   errorMessage: document.getElementById('errorMessage')
 };
@@ -31,7 +33,12 @@ function setError(message = '') {
 function trackerStatusClass(action) {
   if (action === 'BLOCKED') return 'status-blocked';
   if (action === 'FLAGGED') return 'status-flagged';
+  if (action === 'possibleBlock') return 'status-possible';
   return 'status-allowed';
+}
+
+function trackerActionLabel(action) {
+  return action === 'possibleBlock' ? 'POSSIBLE BLOCK' : action;
 }
 
 function renderTrackers(trackers) {
@@ -81,16 +88,19 @@ function renderTrackers(trackers) {
       name.textContent = tracker.trackerName;
       const domain = document.createElement('small');
       domain.textContent = tracker.domain;
-      copy.append(name, domain);
+      const classification = document.createElement('small');
+      classification.className = 'classification-label';
+      classification.textContent = tracker.classification;
+      copy.append(name, domain, classification);
 
       const count = document.createElement('span');
       count.className = 'tracker-count';
-      count.textContent = String(tracker.requestCount);
-      count.title = 'Recorded requests';
+      count.textContent = `${tracker.requestCount} recent`;
+      count.title = 'Requests in retained recent activity';
 
       const status = document.createElement('span');
       status.className = `status-tag ${trackerStatusClass(tracker.action)}`;
-      status.textContent = tracker.action;
+      status.textContent = trackerActionLabel(tracker.action);
       row.append(copy, count, status);
       section.append(row);
     }
@@ -120,10 +130,10 @@ async function refresh() {
       : !popupData.settings?.globalProtection
         ? 'Protection off'
         : popupData.protectionEnabled ? 'Protected' : 'Paused';
-    elements.pageBlocked.textContent = `${popupData.summary?.blockedThisPage || 0} blocked this page`;
-    elements.blockedCount.textContent = String(popupData.summary?.blocked || 0);
-    elements.allowedCount.textContent = String(popupData.summary?.allowed || 0);
-    elements.flaggedCount.textContent = String(popupData.summary?.flagged || 0);
+    elements.recentCount.textContent = `${popupData.summary?.recentActivityCount || 0} retained requests`;
+    elements.pageBlocked.textContent = `${popupData.summary?.blockedThisPage || 0} PrivacyLens rule matches this page`;
+    elements.totalBlockedCount.textContent = String(popupData.summary?.totalBlocked || 0);
+    elements.totalDetectedCount.textContent = String(popupData.summary?.totalDetected || 0);
     renderTrackers(popupData.trackers || []);
     const refreshedTracker = popupData.trackers.find((tracker) => tracker.id === selectedId);
     if (detailWasOpen && refreshedTracker) showTrackerDetail(refreshedTracker);
@@ -134,6 +144,8 @@ async function refresh() {
   }
 }
 
+const requestRefresh = createRefreshCoalescer(refresh);
+
 function showTrackerDetail(tracker) {
   selectedTracker = tracker;
   document.getElementById('detailCategory').textContent = tracker.category || 'UNKNOWN';
@@ -142,7 +154,7 @@ function showTrackerDetail(tracker) {
   document.getElementById('detailCompany').textContent = tracker.company || 'Unknown';
   document.getElementById('detailPurpose').textContent = tracker.purpose || 'Not classified';
   document.getElementById('detailRequests').textContent = String(tracker.requestCount);
-  document.getElementById('detailStatus').textContent = tracker.action;
+  document.getElementById('detailStatus').textContent = trackerActionLabel(tracker.action);
 
   const site = popupData.settings.sites[popupData.siteDomain] || {};
   const trackerAllowed = (site.allowedTrackers || []).some((value) =>
@@ -161,7 +173,7 @@ function showTrackerDetail(tracker) {
 elements.globalProtection.addEventListener('change', async () => {
   try {
     await sendAction('setGlobalProtection', { enabled: elements.globalProtection.checked });
-    await refresh();
+    await requestRefresh();
   } catch (error) { setError(error.message); }
 });
 
@@ -171,7 +183,7 @@ elements.siteProtection.addEventListener('change', async () => {
       siteDomain: popupData.siteDomain,
       enabled: elements.siteProtection.checked
     });
-    await refresh();
+    await requestRefresh();
   } catch (error) { setError(error.message); }
 });
 
@@ -181,7 +193,7 @@ elements.trustSite.addEventListener('click', async () => {
       siteDomain: popupData.siteDomain,
       trusted: !popupData.siteTrusted
     });
-    await refresh();
+    await requestRefresh();
   } catch (error) { setError(error.message); }
 });
 
@@ -209,7 +221,7 @@ document.getElementById('allowTracker').addEventListener('click', async () => {
       domain: selectedTracker.domain,
       allowed
     });
-    await refresh();
+    await requestRefresh();
   } catch (error) { setError(error.message); }
 });
 
@@ -224,7 +236,7 @@ document.getElementById('blockTracker').addEventListener('click', async () => {
       domain: blockDomain,
       blocked
     });
-    await refresh();
+    await requestRefresh();
   } catch (error) { setError(error.message); }
 });
 
@@ -233,7 +245,7 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
 });
 
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.action === 'requestRecorded') refresh();
+  if (message?.action === 'requestRecorded') requestRefresh();
 });
 
-refresh();
+requestRefresh();

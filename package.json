@@ -2,6 +2,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "build:rules": "node easylist-converter/convert.js",
+    "build:tldts": "esbuild node_modules/tldts/dist/es6/index.js --bundle --format=esm --platform=browser --minify --outfile=tracker-db/tldts-bundle.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "fake-indexeddb": "^6.2.5",
+    "parse5": "^8.0.1"
+  },
+  "dependencies": {
+    "tldts": "^5.7.112"
   }
 }

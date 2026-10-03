@@ -23,10 +23,13 @@
         select { min-width: 150px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: white; }
         .domain-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
         .domain-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-        .domain-item button, .reset-button { border: 0; color: var(--green); background: transparent; cursor: pointer; font-weight: 700; }
+        .domain-item button, .reset-button, .clear-button { border: 0; background: transparent; cursor: pointer; font-weight: 700; }
         .domain-item button:hover { text-decoration: underline; }
         .empty { margin: 0; color: var(--muted); }
         .reset-button { padding: 8px 0; color: var(--coral); }
+        .clear-button { padding: 8px 0; color: var(--coral); }
+        .warning { margin: 16px 0; padding: 12px 14px; border-left: 3px solid var(--coral); color: #7b3026; background: #f6e4df; line-height: 1.45; }
+        .warning[hidden] { display: none; }
         #status { min-height: 18px; color: var(--green); }
     </style>
 </head>
@@ -36,6 +39,8 @@
             <img src="../icons/icon48.png" alt="">
             <div><span class="eyebrow">PRIVACY LENS</span><h1>Settings</h1></div>
         </header>
+
+        <aside id="ruleCapacityWarning" class="warning" role="status" hidden></aside>
 
         <section aria-labelledby="protectionHeading">
             <h2 id="protectionHeading">Protection</h2>
@@ -75,7 +80,11 @@
         </section>
 
         <section>
-            <button id="resetSettings" class="reset-button" type="button">Reset settings</button>
+            <h2>Activity data</h2>
+            <p class="description">Remove request history, site and tracker counts, and heuristic observations.</p>
+            <button id="clearActivityData" class="clear-button" type="button">Clear activity data</button>
+            <hr>
+            <button id="resetSettings" class="reset-button" type="button">Reset settings (keeps activity)</button>
             <p id="status" role="status"></p>
         </section>
     </main>
